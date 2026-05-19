@@ -1,0 +1,35 @@
+#!/bin/sh
+# wiki-read — print a page; append backlinks grouped by edge type (typed first)
+set -eu
+nb=0; slug=""
+while [ $# -gt 0 ]; do
+    case "$1" in
+        -h|--help) echo "usage: wiki-read [--no-backlinks] <slug>"; exit 0 ;;
+        --no-backlinks) nb=1; shift ;;
+        --) shift; break ;;
+        -*) echo "wiki-read: unknown argument: $1" >&2; exit 2 ;;
+        *)  slug="$1"; shift; break ;;
+    esac
+done
+[ -n "$slug" ] || { echo "wiki-read: slug required" >&2; exit 2; }
+WIKI_ROOT="${WIKI_ROOT:-$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)}"
+wiki="$WIKI_ROOT/wiki"
+slug=${slug#wiki/}; slug=${slug%.md}
+page="$wiki/$slug.md"
+[ -f "$page" ] || { echo "wiki-read: no page at $page" >&2; exit 1; }
+cat "$page"
+
+links="$wiki/.meta/links.tsv"
+[ "$nb" -eq 1 ] || [ ! -f "$links" ] && exit 0
+
+# typed backlinks (alphabetical) first, then references
+rendered=$(awk -F'\t' -v t="$slug" '
+    NR == 1 && $1 == "from" { next }
+    $2 != t { next }
+    { print ($3 == "references" ? "z" : "a") "\t" $3 "\t" $1 }
+' "$links" | sort | awk -F'\t' '
+    prev != $2 { printf "\n### %s\n", $2; prev = $2 }
+    { print "- [[" $3 "]]" }
+')
+[ -n "$rendered" ] && printf '\n---\n\n## Backlinks\n%s\n' "$rendered"
+exit 0

@@ -1,0 +1,42 @@
+#!/bin/sh
+# wiki-search — title > tag > body match; print top N with snippets
+set -eu
+type=""; n=10
+while [ $# -gt 0 ]; do
+    case "$1" in
+        -h|--help) echo "usage: wiki-search [--type T] [--n N] <query>"; exit 0 ;;
+        --type) type="${2:?--type requires value}"; shift 2 ;;
+        --n)    n="${2:?--n requires value}"; shift 2 ;;
+        --) shift; break ;;
+        -*) echo "wiki-search: unknown argument: $1" >&2; exit 2 ;;
+        *)  break ;;
+    esac
+done
+q="$*"
+[ -n "$q" ] || { echo "wiki-search: query required" >&2; exit 2; }
+WIKI_ROOT="${WIKI_ROOT:-$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)}"
+wiki="$WIKI_ROOT/wiki"
+meta="$wiki/.meta/pages.tsv"
+[ -f "$meta" ] || { echo "wiki-search: no $meta — run the build" >&2; exit 1; }
+qlc=$(printf '%s' "$q" | tr '[:upper:]' '[:lower:]')
+root=$wiki; [ -n "$type" ] && root="$wiki/$type"
+
+# rank: 1=title, 2=tag, 3=body. Format: rank<TAB>path<TAB>source<TAB>snippet
+{
+    awk -F'\t' -v q="$qlc" -v ty="$type" '
+        NR == 1 && $1 == "path" { next }
+        ty != "" && $3 != ty { next }
+        index(tolower($2), q) { print "1\t" $1 "\ttitle\t" $2 }
+        index(tolower($4), q) { print "2\t" $1 "\ttag\t" $4 }
+    ' "$meta"
+    [ -d "$root" ] && find "$root" -type f -name '*.md' -not -path '*/.meta/*' 2>/dev/null \
+    | while IFS= read -r p; do
+        grep -q -i -- "$q" "$p" 2>/dev/null || continue
+        s=${p#"$wiki/"}; s=${s%.md}
+        sn=$(grep -i -m1 -- "$q" "$p" 2>/dev/null | head -n1 | cut -c1-160 | tr '\t' ' ')
+        printf '3\t%s\tbody\t%s\n' "$s" "$sn"
+    done
+} | sort -t '	' -k1,1n -k2,2 \
+  | awk -F'\t' '!seen[$2]++' \
+  | head -n "$n" \
+  | awk -F'\t' '{ printf "[%s] %s (%s)\n  %s\n", $1, $2, $3, $4 }'

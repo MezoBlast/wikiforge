@@ -1,0 +1,29 @@
+#!/bin/sh
+# wiki-list — filter pages.tsv by --tag, --type, --prefix
+set -eu
+tag=""; type=""; prefix=""
+while [ $# -gt 0 ]; do
+    case "$1" in
+        -h|--help) echo "usage: wiki-list [--tag T] [--type T] [--prefix P]"; exit 0 ;;
+        --tag)    tag="${2:?--tag requires value}"; shift 2 ;;
+        --type)   type="${2:?--type requires value}"; shift 2 ;;
+        --prefix) prefix="${2:?--prefix requires value}"; shift 2 ;;
+        *) echo "wiki-list: unknown argument: $1" >&2; exit 2 ;;
+    esac
+done
+WIKI_ROOT="${WIKI_ROOT:-$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)}"
+meta="$WIKI_ROOT/wiki/.meta/pages.tsv"
+[ -f "$meta" ] || { echo "wiki-list: no $meta — run the build" >&2; exit 1; }
+
+# pages.tsv columns: path  title  type  tags  last_verified  confidence
+awk -F'\t' -v ty="$type" -v tg="$tag" -v pf="$prefix" '
+    NR == 1 && $1 == "path" { next }
+    ty != "" && $3 != ty { next }
+    pf != "" && index($1, pf) != 1 { next }
+    tg != "" {
+        n = split($4, a, ",")
+        for (i = 1; i <= n; i++) if (a[i] == tg) { print $1 "\t" $2; next }
+        next
+    }
+    { print $1 "\t" $2 }
+' "$meta"

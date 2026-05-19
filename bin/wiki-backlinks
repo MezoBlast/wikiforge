@@ -1,0 +1,26 @@
+#!/bin/sh
+# wiki-backlinks — list pages linking to <slug> as "<edge>: <from>" lines
+set -eu
+type=""; slug=""
+while [ $# -gt 0 ]; do
+    case "$1" in
+        -h|--help) echo "usage: wiki-backlinks [--type EDGE] <slug>"; exit 0 ;;
+        --type) type="${2:?--type requires value}"; shift 2 ;;
+        --) shift; break ;;
+        -*) echo "wiki-backlinks: unknown argument: $1" >&2; exit 2 ;;
+        *)  slug="$1"; shift; break ;;
+    esac
+done
+[ -n "$slug" ] || { echo "wiki-backlinks: slug required" >&2; exit 2; }
+WIKI_ROOT="${WIKI_ROOT:-$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)}"
+links="$WIKI_ROOT/wiki/.meta/links.tsv"
+[ -f "$links" ] || { echo "wiki-backlinks: no $links — run the build" >&2; exit 1; }
+slug=${slug#wiki/}; slug=${slug%.md}
+
+# format: "edge_type: from_page", grouped by edge type alphabetically
+awk -F'\t' -v t="$slug" -v et="$type" '
+    NR == 1 && $1 == "from" { next }
+    $2 != t { next }
+    et != "" && $3 != et { next }
+    { print $3 ": " $1 }
+' "$links" | sort

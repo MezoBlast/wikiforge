@@ -1,0 +1,12 @@
+#!/bin/sh
+# wiki-manifest — print the wiki's manifest page
+set -eu
+case "${1:-}" in
+    -h|--help) echo "usage: wiki-manifest"; exit 0 ;;
+    "") : ;;
+    *)  echo "wiki-manifest: unexpected argument: $1" >&2; exit 2 ;;
+esac
+WIKI_ROOT="${WIKI_ROOT:-$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)}"
+m="$WIKI_ROOT/wiki/manifest.md"
+[ -f "$m" ] || { echo "wiki-manifest: no manifest at $m" >&2; exit 1; }
+cat "$m"
