@@ -1,0 +1,24 @@
+# notify.md — notification channel config
+
+Used by `.forge/skills/request-human/notify.sh` to ping the human when an agent submits a `blocking` request. Non-blocking urgencies (`useful`, `nice-to-have`) log only.
+
+Uncomment exactly one channel. Each is a shell command run with `$URGENCY`, `$REQUEST_ID`, and `$TITLE` available as env vars.
+
+```sh
+# --- Slack webhook ---
+# curl -s -X POST -H 'Content-Type: application/json' \
+#   --data "{\"text\":\"[$URGENCY] $TITLE ($REQUEST_ID)\"}" \
+#   "https://hooks.slack.com/services/T000/B000/secret-here"
+
+# --- ntfy.sh ---
+# curl -s -d "[$URGENCY] $TITLE ($REQUEST_ID)" \
+#   "https://ntfy.sh/your-private-topic"
+
+# --- email via sendmail ---
+# printf 'Subject: [%s] wikiforge-{{domain}} request %s\n\n%s\n' \
+#   "$URGENCY" "$REQUEST_ID" "$TITLE" \
+#   | sendmail you@example.com
+
+# --- log-only (default) ---
+echo "[notify] $URGENCY | $REQUEST_ID | $TITLE" >> .forge/log.md
+```

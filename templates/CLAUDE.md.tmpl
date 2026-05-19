@@ -1,0 +1,61 @@
+# CLAUDE.md — curator agent entrypoint for wikiforge-{{domain}}
+
+You are working in a **wikiforge curator workspace**. Your job is to build and maintain a domain-scoped wiki about **{{domain}}** from raw sources. The wiki is the artifact; you are the maintainer.
+
+Read `purpose.md` for the why, `schema.md` for the page-type spec, and `wiki/manifest.md` for the current scope. Read `wiki/out_of_scope.md` before fetching anything — it tells you what not to bother with.
+
+## How to act
+
+You operate four skills. **All other operations decompose into these.** Do not invent new top-level workflows.
+
+- **`ingest`** — `raw/` → `wiki/`. Read a source, draft pages, fill frontmatter, update `index.md` and `log.md`. Default single-file; supports `--scan` and `--queue`. See `.forge/skills/ingest/SKILL.md`.
+- **`query`** — `wiki/` → answer. Read relevant pages, synthesize an answer with `[[wikilink]]` citations. See `.forge/skills/query/SKILL.md`.
+- **`lint`** — `wiki/` → report. Mechanical health checks. Run `python3 .forge/lib/lint.py --strict` before any build. See `.forge/skills/lint/SKILL.md`.
+- **`explorer`** — gap → `raw/`. Identify what's missing, fetch what you can, file a request for what you can't. See `.forge/skills/explorer/SKILL.md`.
+
+There is also a fifth skill, **`request-human`**, that the other four invoke for async resource asks (paywalled papers, credentials, money). See `.forge/skills/request-human/SKILL.md`.
+
+If symlinks were created during bootstrap, the four skills are also discoverable as `.claude/skills/wikiforge-{ingest,query,lint,explorer}` for Claude Code's autoload.
+
+## Hard rules
+
+1. **The human is a resource broker, not a reviewer.** Do not stop to ask permission for each page. Only ask via the request-human protocol, and only when you can't get the resource yourself.
+2. **Every claim has provenance.** Frontmatter carries source citations; prose carries `[[wikilinks]]`. The `confidence:` field is honest — `placeholder` and `low` are valid, useful values.
+3. **Schema is law.** `schema.md` defines required frontmatter, enum values, and which edge types each page type may declare. The linter will catch violations; aim to pass on first attempt.
+4. **Edge-type vocabulary is fixed at five.** `references`, `extends`, `contradicts`, `supersedes`, `implements`. Do not invent a sixth. When unsure between `references` (default, prose) and a typed edge, prefer plain prose `[[wikilink]]`.
+5. **Raw lives in `raw/`. It never travels into the bundle.** Bundle excerpts are extracted at build time from `raw/repos/<org>/<repo>@<sha>/` and copied to `wiki/snippets/` — never copy raw files into `wiki/` by hand.
+6. **Append-only state.** `wiki/log.md`, `.forge/log.md`, `.forge/queue.md`, `.forge/requests/inbox/`, `.forge/requests/responses/` are append-only. Don't rewrite history.
+
+## What lives where
+
+```
+purpose.md             # why this wiki exists
+schema.md              # page-type specifications — read before drafting any page
+wiki/                  # the live wiki content
+  manifest.md          # scope + top topics; entry point for queries
+  index.md             # catalog of all pages
+  log.md               # append-only operation record on the wiki
+  out_of_scope.md      # what we explicitly do not cover
+  concepts/ conventions/ code-patterns/ claims/ sources/ entities/
+raw/                   # immutable sources (papers, repos, web clips, notes)
+.forge/                # curator-only machinery; does NOT travel to bundle
+  skills/              # ingest, query, lint, explorer, request-human
+  lib/                 # Python helpers
+  queue.md             # ingest queue
+  log.md               # curator-side operation log
+  requests/inbox/      # agent → human asks
+  requests/responses/  # human → agent responses
+  notify.md            # notification channel config
+  build.sh             # produces dist/<name>-vX.Y.Z/
+dist/                  # build output — the portable bundle
+```
+
+## Session start
+
+On each session, before doing the requested work, run `.forge/skills/request-human/check.sh`. If there are unread responses to your prior requests, read them first — they may unblock queued work.
+
+If you don't know what to do, run `python3 .forge/lib/lint.py --report` and look for gaps; the explorer skill is meant to consume that report.
+
+## Memory
+
+If you need persistent context across sessions, write to `.claude/memory/`. Memory files in that directory are gitignored (they don't travel with the repo) but persist across branch switches within a single clone — see `.gitignore`.

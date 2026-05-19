@@ -1,0 +1,33 @@
+# OBSIDIAN.md — using wikiforge-{{domain}} as an Obsidian vault
+
+A bootstrapped wikiforge workspace is structured as a valid Obsidian vault. Open it and you get the graph view, backlinks panel, full-text search, and Dataview-backed dashboards over the wiki — no custom tooling.
+
+Obsidian is **curator-side only**. The bundle that ships to downstream projects has no Obsidian config; consumer agents use the `bin/wiki-*` bash scripts.
+
+## Setup
+
+1. Install [Obsidian](https://obsidian.md/).
+2. **Open folder as vault** → select this directory (`wikiforge-{{domain}}/`).
+3. When prompted, **install the Dataview plugin** and enable it. (Dashboards in `dashboards/` depend on it.)
+4. The vault config under `.obsidian/` is checked into git, so graph colors, sidebar layout, and exclusion filters are already set.
+
+## What you see
+
+- **`raw/`, `.forge/`, and `dist/`** are excluded from indexing — they don't appear in the global graph view or full-text search.
+- **`wiki/`** is the live wiki. Pages are colored in the graph view by type (concepts blue, conventions purple, code-patterns green, claims orange, sources grey, entities yellow) and dimmed if `confidence: placeholder` or `confidence: refuted`.
+- **`dashboards/`** holds Dataview queries:
+  - `orphans.md` — pages with no incoming links
+  - `stale.md` — pages whose `last_verified` is past threshold (default 180 days)
+  - `low-confidence.md` — pages with `confidence: low` or `placeholder`
+  - `by-type.md` — counts and recent activity per type
+  - `open-requests.md` — pending requests from agents to you (uses Dataview JS to bypass the `.forge/` exclusion)
+
+## What not to do
+
+- **Do not edit pages in Obsidian while an agent session is active.** Agents will overwrite. If you must hand-edit, do it between sessions, then commit so the agent sees your changes on next run.
+- **Do not install extra plugins** unless there is a clear human-curator workflow that justifies it. Dataview is the only required plugin.
+- **Do not rename files in Obsidian.** Obsidian will rewrite wikilinks but won't update frontmatter targets (`extends:`, `contradicts:`, etc.) or `wiki/index.md`. Use the agent's rename workflow instead.
+
+## Why Obsidian rather than a custom UI
+
+You already have a graph viewer, a backlinks panel, and full-text search. They work today. Building anything bespoke would be effort spent away from the wiki's actual content. The agents read and write the underlying files directly; Obsidian is purely your inspection layer over agent-maintained content.

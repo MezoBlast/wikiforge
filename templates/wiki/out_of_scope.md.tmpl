@@ -1,8 +1,8 @@
 ---
 title: out_of_scope
 type: meta
-created: "{{DATE}}"
-last_verified: "{{DATE}}"
+created: "{{today}}"
+last_verified: "{{today}}"
 ---
 
 # Out of scope
@@ -18,17 +18,6 @@ This list is load-bearing: the explorer skill reads it to avoid wasting cycles f
 - Novel investigation, hypothesis generation, experiment planning.
 - Paper drafting, peer review, conference submission logistics.
 
-## Domain-specific exclusions for {{NAME}}
+## Domain-specific exclusions for {{domain}}
 
-<!-- List explicit topics you have decided not to cover. Each entry should say:
-- what is excluded
-- why (cost, scope, better-covered-elsewhere, etc.)
-- what to use instead
-
-Example:
-
-### Real-time benchmark scores
-- **What:** Per-model accuracy on the public leaderboard.
-- **Why:** Updated daily by the leaderboard maintainers; the wiki cannot keep up.
-- **Use instead:** The official leaderboard URL in [[entities/<leaderboard-org>]].
--->
+{{out_of_scope_items}}

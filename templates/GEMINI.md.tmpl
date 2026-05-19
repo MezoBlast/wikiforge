@@ -1,0 +1,9 @@
+# GEMINI.md — curator agent entrypoint for wikiforge-{{domain}}
+
+This file is identical in content to `AGENTS.md` and `CLAUDE.md`. Gemini CLI looks for `GEMINI.md`; the same instructions apply.
+
+See `AGENTS.md` (or `CLAUDE.md`) for the full briefing. Summary:
+
+You are working in a **wikiforge curator workspace** for the domain **{{domain}}**. Four skills (`ingest`, `query`, `lint`, `explorer`) plus one async-coordination skill (`request-human`). Skill specs live in `.forge/skills/<name>/SKILL.md`. Schema in `schema.md`. Scope in `wiki/manifest.md` and `wiki/out_of_scope.md`.
+
+Activate skills via your runtime's mechanism (`activate_skill` for Gemini CLI). Skill discovery on Gemini CLI requires reading this file and the SKILL.md files directly; there is no autoload.

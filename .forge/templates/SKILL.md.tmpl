@@ -1,0 +1,63 @@
+---
+name: {{NAME}}-wiki
+description: Read-only wiki of background knowledge for {{NAME}}. Consult before web search for settled facts, canonical code patterns, and standard conventions.
+---
+
+# {{NAME}} wiki — consumer skill
+
+You have access to a bundled wiki of {{PAGE_COUNT}} pages covering background knowledge for **{{NAME}}**. Use it when you need a settled fact, a canonical code pattern, or a standard convention in this domain — **before** doing a web search.
+
+## Scope
+
+{{SCOPE_SUMMARY}}
+
+See `MANIFEST.md` for the full scope summary, page counts by type, and the curator's top-topics index. See `wiki/out_of_scope.md` for what is deliberately not covered.
+
+## How to use
+
+All three commands live in this skill's `bin/` directory and require nothing but POSIX shell:
+
+- `bin/wiki-manifest` — orient: print the wiki's manifest with top topics
+- `bin/wiki-search <query>` — find pages by title, tag, or body content
+  - `--type concept|convention|code-pattern|claim|source|entity` filters by type
+  - `--n N` caps results (default 10)
+- `bin/wiki-read <slug>` — read a page; backlinks (grouped by edge type) appended at the end
+  - `--no-backlinks` suppresses the backlink block
+
+Less common:
+
+- `bin/wiki-list [--tag T] [--type T] [--prefix P]` — enumerate pages with optional filters
+- `bin/wiki-backlinks [--type EDGE] <slug>` — show pages linking to `<slug>` as `<edge>: <from>` lines
+
+## When to use this wiki vs. live retrieval
+
+**Use the wiki for:**
+- Definitions, conventions, dataset formats, evaluation protocols
+- Canonical code patterns (with citation back to repo + commit + line range)
+- Settled empirical claims with evidence trails
+
+**Use live retrieval (web search, arxiv) for:**
+- Anything published in the last 30 days
+- Fast-moving leaderboards or SOTA scores
+- Novel investigation, hypothesis generation
+- Anything explicitly listed in `wiki/out_of_scope.md`
+
+## Edge types in backlinks
+
+Five edge types may appear. `references` (the default, from prose `[[wikilinks]]`) is the most common; the others are typed relationships that often matter more:
+
+- `extends` — A builds on B's foundation
+- `contradicts` — A asserts something incompatible with B
+- `supersedes` — A replaces B; B is obsolete
+- `implements` — A is a realization of the concept/convention B
+
+When `wiki-read` shows typed backlinks, treat them as load-bearing. A page with three `contradicts:` backlinks is contested; one with `supersedes:` backlinks may be the old version.
+
+## Feedback
+
+Append observations to `feedback.md` at the root of this skill: gaps you noticed, claims that turned out wrong, pages that surprised you with their accuracy. The curator harvests this periodically and routes items back into ingest or the explorer queue.
+
+---
+
+Bundle: {{NAME}} v{{VERSION}} (sha {{SHA}}, built {{DATE}})
+Schema version: {{SCHEMA_VERSION}}

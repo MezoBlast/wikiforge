@@ -1,0 +1,17 @@
+{
+    "useMarkdownLinks": false,
+    "newLinkFormat": "shortest",
+    "userIgnoreFilters": [
+        "raw/",
+        ".forge/",
+        "dist/"
+    ],
+    "readableLineLength": true,
+    "showLineNumber": false,
+    "alwaysUpdateLinks": true,
+    "promptDelete": true,
+    "attachmentFolderPath": "wiki/_attachments",
+    "showUnsupportedFiles": false,
+    "useTab": false,
+    "tabSize": 2
+}

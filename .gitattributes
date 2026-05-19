@@ -1,0 +1,16 @@
+# raw sources are large and binary — LFS them
+raw/papers/**/*.pdf filter=lfs diff=lfs merge=lfs -text
+raw/papers/**/*.PDF filter=lfs diff=lfs merge=lfs -text
+
+# repos in raw/repos/ are clones we manage by directory, not git-tracked file-by-file.
+# They are kept on disk but excluded from LFS (and ideally from version control —
+# see .gitignore for the project policy). If you DO commit clones, large binaries
+# inside them should also be LFS-tracked.
+raw/repos/**/*.bin filter=lfs diff=lfs merge=lfs -text
+raw/repos/**/*.so  filter=lfs diff=lfs merge=lfs -text
+raw/repos/**/*.dylib filter=lfs diff=lfs merge=lfs -text
+
+# normalize line endings on text
+* text=auto eol=lf
+*.sh text eol=lf
+*.md text eol=lf

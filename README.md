@@ -1,103 +1,81 @@
-# wikiforge-{{NAME}}
+# wikiforge
 
-A domain-scoped wiki about **{{NAME}}**, maintained by curator agents and consumed by downstream auto-research agents as a portable bundle.
+A curator workspace template that produces portable, read-only knowledge bundles for AI auto-research agents. One repo per research domain. The wiki is the artifact; agents are the maintainers; bash is the consumer interface.
 
-This is a **curator workspace**. Open it in Obsidian to browse; the agents do the writing.
+## States
 
-## To use this repo as a starting point for your own domain
+The repo has two states.
 
-This repo is the canonical wikiforge workspace layout. To start a wiki for a specific domain:
+- **Template state** (this `master` branch). Skeleton + skill specs + Python machinery + Obsidian config + bootstrap runbook. No domain decided yet. Files like `purpose.md`, `CLAUDE.md`, `wiki/manifest.md` do not exist — they are produced by bootstrap. Look in `templates/` and `bootstrap.md` if you want to inspect what bootstrap will generate.
+- **Initialized state** (on a branch named like `claude/bootstrapped`). Bootstrap has run; the domain is named, templates substituted, agent-config files in place, linter passing on the seeded workspace. From here, the four skills (`ingest`, `query`, `lint`, `explorer`) operate the wiki.
 
-1. Clone or copy the repo and rename it `wikiforge-<your-domain>/` (lowercase, hyphens).
-2. Replace the `{{NAME}}`, `{{DATE}}`, `{{AUTHOR}}` placeholders in these files:
-   - `README.md`, `AGENTS.md`, `CLAUDE.md`, `GEMINI.md`, `OBSIDIAN.md`
-   - `purpose.md`, `wiki/manifest.md`, `wiki/index.md`, `wiki/log.md`, `wiki/out_of_scope.md`
-   - `.forge/log.md`
-3. Install Python deps: `pip install -r requirements.txt` (just `pyyaml`).
-4. `git init` and (if you'll have large PDFs in `raw/papers/`) `git lfs install`.
-5. Open in Obsidian and install the Dataview plugin when prompted.
-6. Drop sources into `raw/` and invoke the ingest skill — see `.forge/skills/ingest/SKILL.md`.
+Master stays pristine on purpose: you can pull fresh updates to schema, skills, lint rules, etc. into your bootstrapped branches without merge churn over substituted prose.
 
-A one-liner to do the substitution:
+## To bootstrap
 
-```sh
-NAME=my-domain DATE=$(date -u +%Y-%m-%d) AUTHOR="$(git config user.name)"
-grep -rl '{{NAME}}\|{{DATE}}\|{{AUTHOR}}' . --exclude-dir=.git --exclude-dir=raw \
-  | xargs sed -i "s/{{NAME}}/$NAME/g; s/{{DATE}}/$DATE/g; s/{{AUTHOR}}/$AUTHOR/g"
-```
+1. Clone the repo and ensure prerequisites are installed:
 
-## Quick links
+   ```sh
+   git clone <your-clone-url> wikiforge-<your-domain>
+   cd wikiforge-<your-domain>
+   pip install -r requirements.txt        # only pyyaml
+   git lfs install --local
+   ```
 
-- [`purpose.md`](purpose.md) — why this wiki exists
-- [`wiki/manifest.md`](wiki/manifest.md) — current scope and top topics
-- [`wiki/index.md`](wiki/index.md) — catalog of all pages
-- [`schema.md`](schema.md) — page-type spec (load-bearing for agents and curators)
-- [`OBSIDIAN.md`](OBSIDIAN.md) — how to view this workspace as an Obsidian vault
-- [`AGENTS.md`](AGENTS.md) (= `CLAUDE.md` = `GEMINI.md`) — agent entrypoint
+2. Open `bootstrap.md` in your agent (or read it yourself if you're doing this by hand).
+3. The agent walks the 10 steps in `bootstrap.md`. Step 2 is a five-question interview (domain slug, scope, key questions, out-of-scope items, anticipated consumers). The rest is mechanical.
+4. Bootstrap commits the initialized state on a branch like `claude/bootstrapped`. Master is untouched.
 
-## Working with this wiki
+The interview takes <10 minutes for an engaged human. Bootstrap as a whole runs once per workspace and is never re-read.
 
-### As a human curator
-
-```sh
-# Open in Obsidian (recommended):
-open .                              # macOS; or use Obsidian "open folder as vault"
-
-# Inspect health from the command line:
-bin/wiki-manifest                   # what's covered
-python3 .forge/lib/lint.py --report # what needs attention
-
-# Dashboards in dashboards/ (orphans, stale, low-confidence, by-type, open-requests)
-# render as live Dataview tables when opened in Obsidian.
-```
-
-### As a curator agent
-
-See `AGENTS.md`. The four skills live under `.forge/skills/`:
-
-- `ingest/`     — raw → wiki
-- `query/`      — wiki → answer
-- `lint/`       — wiki → report
-- `explorer/`   — gap → raw (with `request-human/` for things you can't fetch)
-
-### As a downstream project (consumer)
-
-Build a bundle from this workspace:
-
-```sh
-.forge/build.sh --version 0.1.0     # produces dist/{{NAME}}-v0.1.0/
-```
-
-Then in any downstream project:
-
-```sh
-cp -r dist/{{NAME}}-v0.1.0/ ~/your-project/.claude/skills/{{NAME}}-wiki/
-```
-
-The consumer agent reads `SKILL.md` on autoload, calls `bin/wiki-manifest` for orientation, then `bin/wiki-search` / `bin/wiki-read` for queries throughout its work. The bundle requires only POSIX shell — no Python, no dependencies, no install step.
-
-## Layout at a glance
+## Layout (template state)
 
 ```
 .
-├── README.md  AGENTS.md  CLAUDE.md  GEMINI.md  OBSIDIAN.md   # entrypoints
-├── purpose.md  schema.md  requirements.txt                    # contracts + deps
-├── wiki/         # the live, mutable artifact
-│   ├── manifest.md  index.md  log.md  out_of_scope.md
-│   └── concepts/  conventions/  code-patterns/  claims/  sources/  entities/
-├── raw/          # immutable sources — never travels into the bundle
-│   └── papers/  repos/  docs/  web/  notes/
-├── bin/          # POSIX bash read skill — same source shipped in bundles
+├── README.md             # this file
+├── schema.md             # page-type spec (domain-agnostic; ships as-is)
+├── bootstrap.md          # one-shot runbook for the bootstrap agent
+├── requirements.txt      # pyyaml
+├── OBSIDIAN.md           # human-facing Obsidian setup notes (generic)
+├── bin/                  # POSIX bash read scripts — used by curator AND ship in bundles
 │   └── wiki-manifest  wiki-list  wiki-search  wiki-read  wiki-backlinks
-├── .forge/       # curator-only machinery — never travels into the bundle
-│   ├── build.sh
-│   ├── lib/          schema_spec.py  frontmatter.py  wikilinks.py
-│   │                 provenance.py   ingest_helpers.py  lint.py  build.py
-│   ├── skills/       ingest/  query/  lint/  explorer/  request-human/
-│   ├── templates/    SKILL.md.tmpl  MANIFEST.md.tmpl
-│   ├── requests/     inbox/  responses/  archive/
-│   ├── queue.md  log.md  notify.md
-├── .obsidian/    # vault config (graph colors, exclusions, plugin manifest)
-├── dashboards/   # Dataview views over wiki/  and  .forge/requests/
-└── dist/         # build output (gitignored)
+├── templates/            # bootstrap input — .tmpl files; consumed (and deleted) at Step 3
+│   ├── CLAUDE.md.tmpl  AGENTS.md.tmpl  GEMINI.md.tmpl
+│   ├── purpose.md.tmpl
+│   ├── wiki/manifest.md.tmpl  out_of_scope.md.tmpl
+│   └── .forge/notify.md.tmpl
+├── .forge/               # curator-only machinery (never travels into bundles)
+│   ├── build.sh                 # bundle builder
+│   ├── lib/                     # Python: schema_spec, frontmatter, wikilinks,
+│   │                            # lint, build, provenance, ingest_helpers, bootstrap
+│   ├── skills/                  # ingest, query, lint, explorer, request-human
+│   │   └── <name>/SKILL.md
+│   ├── skills/request-human/    # also has 4 .sh scripts: submit, check, archive, notify
+│   └── templates/               # BUNDLE-build templates (not bootstrap templates):
+│                                # SKILL.md.tmpl, MANIFEST.md.tmpl rendered by build.sh
+├── .obsidian/            # vault config — graph colors, exclusion filters, plugin manifest
+├── dashboards/           # Dataview views: orphans, stale, low-confidence, by-type, open-requests
+├── raw/                  # .gitkeep stubs for papers/, repos/, docs/, web/, notes/
+└── wiki/                 # .gitkeep stubs for concepts/, conventions/, code-patterns/,
+                          # claims/, sources/, entities/
 ```
+
+After bootstrap completes (on the bootstrapped branch), these additional files appear at the workspace root: `CLAUDE.md`, `AGENTS.md`, `GEMINI.md`, `purpose.md`, `wiki/manifest.md`, `wiki/index.md`, `wiki/log.md`, `wiki/out_of_scope.md`, `.forge/notify.md`, `.forge/queue.md`, `.forge/log.md`, `.forge/bootstrap.log`. The `templates/` directory is removed; `bootstrap.md` is renamed into `.forge/bootstrap.log`.
+
+## Design references
+
+- `.claude/README.md` — the project overview (why wikiforge exists, what it is and isn't, the two-artifact split).
+- `.claude/plans/PLAN_Init.md` — the seven-phase implementation roadmap.
+- `.claude/plans/BOOTSTRAP_PLAN.md` — the spec that `bootstrap.md` derives from.
+
+## Repo conventions
+
+- Master is template state and is pulled cleanly. Do not commit substituted files (no `CLAUDE.md`, `purpose.md`, etc.) to master.
+- Bootstrapped state lives on branches: `claude/bootstrapped`, `gemini/bootstrapped`, etc. One branch per agent runtime, or per domain instance — your call.
+- Agent memory (if your agent uses persistent memory files) lives under `.claude/memory/`, which is gitignored — it persists across branch switches in a single clone but does not travel with the repo.
+
+## What this is not
+
+A replacement for live retrieval. Wikiforge bundles cover the *stable, embarrassing-to-re-derive background* of a domain. Frontier results, fresh papers, fast-moving SOTA still come from web search and arxiv. The bundle is a layer of grounded vocabulary and convention beneath those live tools, not above them.
+
+It is also not an experiment-running platform, an idea-generator, a paper-writer, or a research lifecycle manager. Other projects cover those phases. Wikiforge is the substrate underneath.

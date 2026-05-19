@@ -1,0 +1,39 @@
+# {{NAME}} — bundle manifest
+
+| Field            | Value          |
+| ---------------- | -------------- |
+| Bundle version   | {{VERSION}}    |
+| Built            | {{DATE}}       |
+| Schema version   | {{SCHEMA_VERSION}} |
+| Commit           | {{SHA}}        |
+| Total pages      | {{PAGE_COUNT}} |
+
+## Scope
+
+{{SCOPE_SUMMARY}}
+
+## Page counts by type
+
+{{STATS}}
+
+## Top topics
+
+See `wiki/manifest.md` (the curator's manifest, copied verbatim into the bundle). That document is the human-curated entry point for orientation.
+
+## What is deliberately out of scope
+
+See `wiki/out_of_scope.md`. Consumer agents should fall back to live retrieval (web, arxiv, semantic scholar) for the topics listed there.
+
+## How this bundle was built
+
+This bundle was produced by `wikiforge` (https://...) from a curator workspace. The curator workspace contains raw sources, draft pages, ingest queues, request inboxes, and an Obsidian vault config — none of which travel into this bundle. What ships here is the frozen, citation-bearing, agent-readable subset.
+
+The build process:
+
+1. Lints the wiki in strict mode; fails on any error.
+2. Walks all pages, parses frontmatter, drops `draft: true` and (by default) `confidence: placeholder` pages.
+3. Builds `wiki/.meta/pages.tsv` (one row per page) and `wiki/.meta/links.tsv` (one row per edge — `references` for prose links, plus the four typed edges from frontmatter).
+4. For each `code-patterns/` page, extracts the cited line range from the pinned repo in the curator's `raw/repos/` tree, prepends a provenance header, writes to `wiki/snippets/<basename>.txt`.
+5. Copies `wiki/` and `bin/` into the bundle, renders this `MANIFEST.md` and `SKILL.md`, stamps `VERSION`.
+
+The bundle is read-only by contract. Consumer agents call `bin/wiki-*` and append to `feedback.md`; they never modify wiki pages.
