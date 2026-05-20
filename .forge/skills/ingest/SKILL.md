@@ -10,7 +10,7 @@ You are turning a raw source into wiki pages. Each invocation handles one source
 ## Modes
 
 - **`ingest <path>`** — process exactly this source. The path is relative to the workspace root and lives somewhere under `raw/`.
-- **`ingest --scan`** — walk `raw/`, find files not already in `.forge/queue.md` or `wiki/sources/`, append them as `[ ]` entries, then process pending entries.
+- **`ingest --scan`** — walk `raw/` with `ingest_helpers.scan_raw()`, find sources not already in `.forge/queue.md` or `wiki/sources/`, append them as `[ ]` entries with `ingest_helpers.append_queue_entry()`, then process pending entries.
 - **`ingest --queue`** — process existing pending entries in `.forge/queue.md` without scanning.
 - **`ingest`** (no args) — ask the human: "scan, or specific path?" (interactive only)
 
@@ -25,9 +25,14 @@ from ingest_helpers import content_hash
 h = content_hash("raw/papers/foo.pdf")          # "sha256:abc123..."
 ```
 
-Look in `wiki/sources/` for any page whose frontmatter `content_hash:` equals `h`.
+Use `ingest_helpers.find_ingested_source(content_hash=h)` to look for an existing `wiki/sources/` page with that hash (it also accepts `source_path=` to match by raw path):
 
-- **Same hash → skip.** Append a one-line log entry to `.forge/log.md` and move on.
+```python
+from ingest_helpers import find_ingested_source
+hit = find_ingested_source(content_hash=h)   # -> (slug, frontmatter) or None
+```
+
+- **Same hash → skip.** Append a one-line log entry to `wiki/log.md` and move on.
 - **Different hash on a page with the same `source_path:` → re-ingest.** The source changed.
 - **No matching page → proceed.**
 
@@ -45,14 +50,55 @@ Use `ingest_helpers.detect_source_type(path)` or eyeball the location:
 
 For repos, the directory layout is always `raw/repos/<org>/<repo>@<sha>/`. The `<org>/<repo>` and `<sha>` go into `code-patterns/` page provenance verbatim.
 
-### 3. Read the source
+### 3. Normalize the source to markdown
 
-- **Papers (PDF):** read directly via your Read tool. If you can't extract text, write a request to `.forge/requests/inbox/` with `type: pdf-text-extraction` and `urgency: blocking`. Don't attempt to draft a page from an unreadable source.
-- **Repos:** start with `README` and any top-level config files. Use `ingest_helpers.enumerate_repo_files(repo_root)` for an ordered list of "interesting" files. Read selectively — not the whole repo.
-- **Docs / web:** read directly. They should already be plain markdown if extracted properly.
-- **Notes:** read directly.
+Raw sources arrive in many formats. Before reading, convert the artifact to
+markdown with the normalizer. It routes by file type and writes output to a
+sibling `<stem>.converted/` directory — the original raw file is left in place,
+untouched.
 
-### 4. Gather context
+```python
+from normalize import normalize_source, NormalizeError
+try:
+    readable = normalize_source("raw/papers/foo.pdf")   # -> Path to markdown
+except NormalizeError as e:
+    ...   # see "If normalization fails" below
+```
+
+| Raw type (location)                  | Tool the normalizer uses          |
+| ------------------------------------ | --------------------------------- |
+| `raw/papers/*.pdf`                    | MinerU (PDF → markdown + images)  |
+| `raw/docs/*.{pdf,docx,pptx,xls,xlsx}` | MinerU                            |
+| `raw/web/*.{html,htm}`                | markdownify (offline, local)      |
+| `raw/web/*.url` (file holding a URL)  | Tavily CLI (`tvly extract`)       |
+| `raw/notes/*.{md,txt}`                | none — already readable, returned as-is |
+| `raw/repos/<org>/<repo>@<sha>/`       | none — a directory, returned as-is |
+
+MinerU uses the free agent API (10MB / 20 pages per file) unless
+`MINERU_API_TOKEN` is set in `.forge/secrets/credentials.env`, which unlocks the
+precision API (200MB / 200 pages). The Tavily path needs `TAVILY_API_KEY` in the
+same file. `normalize_source` loads `.forge/secrets/credentials.env`
+automatically — you do not load it yourself.
+
+**If normalization fails** (`NormalizeError`) — e.g. a PDF over the free-tier
+limit with no token, or the Tavily CLI not installed — do NOT draft a page from
+an unreadable source. Set the queue entry to `[!]` blocked
+(`ingest_helpers.set_queue_state(queue_path, source_path, "!", note="req <id>")`)
+and write a request via the request-human skill (`type: large-download` for an
+oversize PDF, `type: paid-api` or `human-judgement` otherwise).
+
+### 4. Read the source
+
+- **Papers / docs:** read the converted markdown that `normalize_source`
+  returned. Figures are in the sibling `images/` directory if you need them.
+- **Repos:** start with `README` and any top-level config files. Use
+  `ingest_helpers.enumerate_repo_files(repo_root)` for an ordered list of
+  "interesting" files. Read selectively — not the whole repo.
+- **Web:** read the converted markdown.
+- **Notes:** `normalize_source` returns the note path unchanged — read it
+  directly.
+
+### 5. Gather context
 
 Before drafting pages, read:
 
@@ -61,7 +107,7 @@ Before drafting pages, read:
 - `wiki/index.md` (existing pages — for dedup and cross-link targets)
 - Any pages your source claims overlap with (use `bin/wiki-search` to find them)
 
-### 5. Draft pages
+### 6. Draft pages
 
 Always draft a `wiki/sources/<slug>.md`, even for trivial sources. The source page is the agent's read of what the source contributes.
 
@@ -88,19 +134,19 @@ Conditional drafts (only when warranted by the source):
 - `claims/` pages need non-empty `evidence:` OR `counter_evidence:`. An empty pair is a hard error.
 - `code-patterns/` pages need full provenance and the cited file must actually exist in `raw/repos/<repo>@<sha>/<path>`.
 
-### 6. Update meta files
+### 7. Update meta files
 
 - Append entries to `wiki/index.md` for any new pages you created. (Or run `python3 .forge/lib/lint.py --fix` at the end to rebuild it.)
 - Append to `wiki/log.md`: `## [YYYY-MM-DD] ingest | <source-slug>` plus a one-line note.
 
-### 7. Update the queue
+### 8. Update the queue
 
 If the source was queued:
 - Change `[ ]` → `[x]` when done, or `[~]` while in progress, or `[!]` if blocked (with a request id).
 
 Use `ingest_helpers.set_queue_state(queue_path, source_path, "x")`.
 
-### 8. Surface follow-ups
+### 9. Surface follow-ups
 
 If the source cites other sources you don't have:
 - Publicly fetchable (arxiv, github, public docs) → add a note to `.forge/queue.md` for the explorer to pick up. Don't fetch inline.
@@ -110,6 +156,41 @@ If the source contradicts an existing wiki page:
 - Note it in your `sources/<slug>.md` body under a `## Contradictions` heading.
 - Consider whether to add a `contradicts:` frontmatter edge on a `claims/` page.
 - Do NOT silently overwrite the existing page. Flag it for the human curator via `.forge/log.md`.
+
+## Frontmatter cheatsheet
+
+Encode this so pages pass lint on the first try. The full spec is `schema.md`;
+this is the compressed version ingest needs in hand.
+
+**Every page** requires: `title`, `type`, `created` (YYYY-MM-DD),
+`last_verified` (YYYY-MM-DD), `confidence`
+(`verified` | `likely` | `low` | `placeholder` | `refuted`).
+
+Per-type extra required fields and the edge types each type may declare in
+frontmatter:
+
+| Type           | Extra required fields                                                    | Frontmatter edges allowed              |
+| -------------- | ------------------------------------------------------------------------ | -------------------------------------- |
+| `concept`      | —                                                                        | none                                   |
+| `convention`   | —                                                                        | none                                   |
+| `code-pattern` | `repo`, `commit` (40-char sha), `path`, `lines`, `language`               | `supersedes`, `implements`             |
+| `claim`        | `status` (`validated`\|`likely`\|`open`\|`refuted`), `evidence`, `counter_evidence` | `extends`, `contradicts`, `supersedes` |
+| `source`       | `source_type` (`paper`\|`repo`\|`doc`\|`web`\|`note`), `source_path`, `content_hash` | none                          |
+| `entity`       | `entity_type` (`person`\|`lab`\|`project`\|`tool`\|`organization`)        | none                                   |
+
+Rules the linter enforces — get these right up front:
+
+- A `claim` with **both** `evidence:` and `counter_evidence:` empty is a hard
+  error. At least one must be non-empty.
+- Declaring an edge type not in the "allowed" column is a `disallowed-edge-type`
+  error. When unsure, prefer a plain prose `[[wikilink]]` (always allowed, emits
+  a `references` edge).
+- A `code-pattern`'s `repo` / `commit` / `path` must resolve to a real file at
+  `raw/repos/<org>/<repo>@<commit>/<path>`, or lint reports `excerpt-missing`.
+- Slugs are unique across **all** types — `concepts/foo` and `claims/foo`
+  collide (`duplicate-slug` error).
+- `confidence` is honest: a single source supports `likely` at best; unverified
+  synthesis is `low`; a stub pending more reading is `placeholder`.
 
 ## Lint before you stop
 
@@ -130,6 +211,8 @@ Address every error you introduced. Warnings can wait — but errors block the n
 ## See also
 
 - `schema.md` — page-type spec (frontmatter requirements per type)
+- `.forge/lib/normalize.py` — how raw artifacts of each type become markdown
+- `.forge/lib/credentials.py` — how tool tokens are loaded from `.forge/secrets/`
 - `.forge/skills/lint/SKILL.md` — what mechanical errors look like
 - `.forge/skills/request-human/SKILL.md` — how to ask for what you can't fetch
 - `.forge/skills/explorer/SKILL.md` — what runs *between* ingest invocations to keep the queue full
