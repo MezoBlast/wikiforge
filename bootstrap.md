@@ -1,15 +1,17 @@
 # bootstrap.md — wikiforge bootstrap runbook
 
-You are an agent reading this file in a fresh clone of the wikiforge template repository. Your single job is to take this workspace from **template state** to **initialized state** by walking the steps below in order. After you complete them, this file is renamed into `.forge/bootstrap.log` and never read again.
+You are an agent reading this file in a fresh clone of the wikiforge template repository. Your single job is to take this workspace from **template state** to **initialized state** by walking the steps below in order. After you complete them, this file is removed; `.forge/bootstrap.log` carries the completion record, and this runbook is never read again.
 
-This runbook is imperative. The reasoning behind each step lives in `.claude/plans/BOOTSTRAP_PLAN.md` — read it if you need to understand *why* something is done, but do not deviate from what's written here. Skipping a step or expanding the interview violates the contract.
+This runbook is imperative and **self-contained** — you do not need any other file to execute it. (Its design rationale lived in a `BOOTSTRAP_PLAN.md` spec during development; a fresh clone does not ship that spec and you do not need it.) Do not deviate from what's written here. Skipping a step or expanding the interview violates the contract.
 
 ## Prerequisites
 
 - `git`, `git-lfs`, `python3` are installed and on `PATH`.
 - `pip install -r requirements.txt` has been run (pulls in `pyyaml`).
-- You are on the `master` branch with no uncommitted changes (a fresh clone).
+- You are on a clean working tree (a fresh clone). You may be on `master` or on a branch you created for this run — Step 9 handles both.
 - A human is available for a short synchronous interview (Step 2). This is the **only** synchronous human interaction in the entire wikiforge lifecycle.
+
+Step 1 opens with a preflight probe that enforces the first two items. Do not skip it: a missing `git-lfs` otherwise surfaces only at Step 5, *after* the human has already answered all five interview questions.
 
 ## The contract (what success looks like)
 
@@ -17,20 +19,35 @@ When you finish, all of these must hold:
 
 1. `bootstrap.md` is gone from the repo root.
 2. `.forge/bootstrap.log` exists and contains one final-completion record.
-3. No file contains an unsubstituted `{{...}}` placeholder.
-4. You are on a branch named `<agent>/bootstrapped` (e.g. `claude/bootstrapped`) — not `master`. Master remains pristine.
+3. No file that bootstrap *produces or substitutes* contains an unsubstituted `{{...}}` placeholder. That set is exactly: `purpose.md`, `wiki/{manifest,index,log,out_of_scope}.md`, `CLAUDE.md`, `AGENTS.md`, `GEMINI.md`, `OBSIDIAN.md`, `.forge/notify.md`, `.gitignore`, `.gitattributes`. Out of scope for this check: `.forge/lib/*.py` (source files — `bootstrap.py` holds `{{...}}` strings as substitution keys) and `.forge/templates/*.tmpl` (bundle-build templates — they legitimately retain `@VAR@` placeholders for the *separate* build-time pass; note the distinct delimiter).
+4. You are on a branch other than `master`/`main`; master remains pristine. The conventional name is `<agent>/bootstrapped` (e.g. `claude/bootstrapped`), but if you were already on a non-master branch when bootstrap began, committing there satisfies the contract.
 5. There is at least one commit on that branch with message `bootstrap: <domain>`.
-6. `git lfs ls-files` works.
+6. `git lfs ls-files` runs without error.
 7. The four skills are discoverable under `.forge/skills/` and (best-effort) symlinked at `.claude/skills/wikiforge-*`.
 8. `python3 .forge/lib/lint.py --strict` exits 0 with `0 error(s), 0 warning(s)` on the seeded workspace.
 
 ## Workflow
 
-### Step 1 — Detect partial bootstrap state
+### Step 1 — Preflight, then detect partial bootstrap state
+
+**Preflight.** Confirm the toolchain *before* touching anything or interviewing anyone:
+
+```sh
+for tool in git git-lfs python3; do
+    command -v "$tool" >/dev/null 2>&1 || { echo "bootstrap: missing prerequisite: $tool" >&2; exit 1; }
+done
+python3 -c 'import yaml' >/dev/null 2>&1 || { echo "bootstrap: pyyaml missing — run: pip install -r requirements.txt" >&2; exit 1; }
+```
+
+If any check fails, **stop** and tell the human exactly what to install (`git-lfs`: `apt install git-lfs` / `brew install git-lfs`; `pyyaml`: `pip install -r requirements.txt`). Do not proceed into the interview — making someone answer five questions and then failing at Step 5 is the exact failure this probe exists to prevent.
+
+**Detect partial state.** Then check for a prior bootstrap:
 
 ```sh
 ls .forge/bootstrap.log 2>/dev/null
 ```
+
+The log is markers-only. Step markers match `## [<timestamp>] step-N complete`; the final record matches `## [<timestamp>] BOOTSTRAP COMPLETE`. Scan for those anchored patterns:
 
 - **Log absent or empty** → fresh bootstrap; continue to Step 2.
 - **Log present with step markers but no final-completion record** → resumed bootstrap. Print the markers found, ask the human "resume from step N+1, or start over?", and proceed accordingly.
@@ -87,7 +104,7 @@ The helper:
 - Walks every `*.tmpl` under `templates/`, substitutes placeholders (`{{domain}}`, `{{scope}}`, `{{key_questions}}`, `{{out_of_scope_items}}`, `{{anticipated_consumers}}`, `{{today}}`, `{{author}}`), writes the result to the corresponding path, drops `.tmpl`.
 - Refuses to overwrite an existing target (exit 3 — means the workspace is dirty, abort).
 - Scans every produced file for remaining `{{...}}` patterns and fails loudly (exit 4) if any are left (template bug; stop and report which file).
-- Creates the empty directories (`raw/<types>`, `wiki/<types>`, `.forge/requests/<states>`, `.forge/secrets`, `dist`, plus `dashboards` if `.obsidian/` is present).
+- Creates any missing directories (`raw/<types>`, `wiki/<types>`, `.forge/requests/<states>`, `.forge/secrets`, `dist`). Most already exist as `.gitkeep` stubs in the template, so typically only `dist/` is newly created.
 - Creates seed append-only files (`wiki/index.md`, `wiki/log.md`, `.forge/queue.md`, `.forge/log.md`) with header lines.
 - Best-effort creates `.claude/skills/wikiforge-{ingest,query,lint,explorer}` symlinks pointing at `.forge/skills/<name>/`. Returns `null` for `symlinks_created` if filesystem doesn't support symlinks; that's an optimization, not a contract.
 
@@ -126,16 +143,17 @@ echo "## [$(date -u +%Y-%m-%dT%H:%M:%SZ)] step-4 complete" >> .forge/bootstrap.l
 
 ### Step 5 — Initialize git LFS
 
-The repository is already a git repo (you cloned it). Just initialize LFS:
+The repository is already a git repo (you cloned it), and `git-lfs` was confirmed present by the Step 1 preflight. Initialize it and fail loudly if anything is wrong:
 
 ```sh
-git lfs install --local
-git lfs track 'raw/papers/**/*.pdf' 'raw/papers/**/*.PDF' 2>/dev/null || true
+git lfs install --local || { echo "ERROR: git lfs install failed" >&2; exit 1; }
+git lfs track 'raw/papers/**/*.pdf' 'raw/papers/**/*.PDF' >/dev/null 2>&1 || true
 ```
 
-The `.gitattributes` already has the LFS patterns (written by Step 3). Verify:
+The `.gitattributes` already has the LFS patterns (written by Step 3). Verify both that LFS is functional and that the patterns are present — this is contract invariant 6:
 
 ```sh
+git lfs ls-files >/dev/null 2>&1 || { echo "ERROR: git lfs not functional" >&2; exit 1; }
 grep -q 'filter=lfs' .gitattributes || { echo "ERROR: .gitattributes missing LFS patterns" >&2; exit 1; }
 ```
 
@@ -194,20 +212,31 @@ echo "## [$(date -u +%Y-%m-%dT%H:%M:%SZ)] step-8 complete (lint: 0/0)" >> .forge
 
 ### Step 9 — Branch, finalize, commit
 
-This is where bootstrap diverges from the working tree on master. Master stays pristine; the initialized state goes on a branch.
+This is where bootstrap diverges from master. Master stays pristine; the initialized state goes on a branch.
 
 ```sh
-# Pick a branch name based on your agent runtime. Examples:
-#   claude/bootstrapped, gemini/bootstrapped, codex/bootstrapped, cursor/bootstrapped
-AGENT_BRANCH="claude/bootstrapped"  # adapt to your runtime
-git checkout -b "$AGENT_BRANCH"
+# Land the initialized state on a branch — never on master. If you are already
+# on a non-master branch (a worktree, a CI branch, a branch you created for this
+# run), commit there. Otherwise create the conventional <agent>/bootstrapped.
+current=$(git branch --show-current)
+case "$current" in
+    master|main|"")
+        AGENT_BRANCH="claude/bootstrapped"   # adapt to your runtime: gemini/, codex/, cursor/, ...
+        git checkout -b "$AGENT_BRANCH"
+        ;;
+    *)
+        AGENT_BRANCH="$current"
+        echo "already on non-master branch '$current' — committing here"
+        ;;
+esac
 
-# Rename bootstrap.md → .forge/bootstrap.log (append, do not overwrite — the log
-# already has step markers from earlier steps).
-cat bootstrap.md >> .forge/bootstrap.log
+# Remove the runbook. The log stays markers-only — do NOT cat the runbook into
+# it, or Step 1's resumption scan on a future run will trip over the embedded
+# '## [...]' headings. The runbook text remains recoverable from master's git
+# history (`git show master:bootstrap.md`) if ever needed.
 rm bootstrap.md
 
-# Append the final-completion record.
+# Append the final-completion record to the markers-only log.
 {
     echo ""
     echo "## [$(date -u +%Y-%m-%dT%H:%M:%SZ)] BOOTSTRAP COMPLETE | domain=<domain> | agent=<your-identifier>"
@@ -271,7 +300,7 @@ Restated so you don't drift:
 - **No sub-agent delegation.** You are the bootstrap agent; you do not spawn helpers.
 - **No expansion of the question budget.** Five questions, not six.
 - **No template authoring.** Bootstrap consumes `templates/`; if a template is missing, that's a repo bug — report and stop.
-- **No touching master.** All file changes after Step 9's `git checkout -b` land on the bootstrapped branch.
+- **No touching master.** Step 9 ensures every bootstrap change is committed on a non-master branch — creating `<agent>/bootstrapped` if you began on master, or committing in place if you began on another branch. The commit never lands on `master`/`main`.
 
 ## Recovery
 

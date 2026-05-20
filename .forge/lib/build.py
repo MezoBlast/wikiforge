@@ -150,9 +150,12 @@ def get_git_sha(workspace):
 
 
 def render_template(path, subs):
+    """Render a bundle-build template. Bundle templates use @VAR@ delimiters,
+    distinct from bootstrap's {{var}} delimiters, so the two substitution
+    passes can never collide."""
     text = Path(path).read_text(encoding="utf-8")
     for k, v in subs.items():
-        text = text.replace("{{" + k + "}}", str(v))
+        text = text.replace("@" + k + "@", str(v))
     return text
 
 

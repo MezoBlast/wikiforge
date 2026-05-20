@@ -97,7 +97,7 @@ def build_subs(answers):
         "{{key_questions}}": fmt_bullets(answers["key_questions"]),
         "{{out_of_scope_items}}": fmt_bullets(answers["out_of_scope_items"]),
         "{{anticipated_consumers}}": fmt_bullets(answers["anticipated_consumers"]),
-        "{{today}}": answers.get("today") or datetime.datetime.utcnow().strftime("%Y-%m-%d"),
+        "{{today}}": answers.get("today") or datetime.datetime.now(datetime.timezone.utc).strftime("%Y-%m-%d"),
         "{{author}}": answers.get("author") or get_git_user(),
     }
 
