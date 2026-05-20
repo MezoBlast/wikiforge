@@ -138,8 +138,12 @@ Conditional drafts (only when warranted by the source):
 
 ### 7. Update meta files
 
-- Append entries to `wiki/index.md` for any new pages you created. (Or run `python3 .forge/lib/lint.py --fix` at the end to rebuild it.)
 - Append to `wiki/log.md`: `## [YYYY-MM-DD] ingest | <source-slug>` plus a one-line note.
+- Regenerate the wiki index. Running `python3 .forge/lib/lint.py --fix` is the
+  recommended close-out: it rebuilds both `wiki/index.md` and the `wiki/.meta/`
+  index that `query` reads. (If you only need the `.meta/` index refreshed and
+  not `index.md`, `python3 .forge/lib/index.py` does just that.) This is not
+  optional — pages you ingested are not searchable until the index is rebuilt.
 
 ### 8. Update the queue
 
