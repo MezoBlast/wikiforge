@@ -68,3 +68,18 @@ def test_stale_index_silent_when_meta_fresh(tmp_path):
     os.utime(pages_tsv, (future, future))  # index newer than the page
     issues = lint.lint(wiki, tmp_path / "raw", 180, 30, datetime.date(2026, 5, 20))
     assert not any(i.code == "stale-index" for i in issues)
+
+
+def test_fix_regenerates_meta_index(tmp_path):
+    wiki = tmp_path / "wiki"
+    for d in ("concepts", "conventions", "code-patterns", "claims", "sources", "entities"):
+        (wiki / d).mkdir(parents=True)
+    (wiki / "concepts" / "sgd.md").write_text(
+        _page("title: SGD\ntype: concept\ncreated: 2026-01-01\n"
+              "last_verified: 2026-01-01\nconfidence: likely"),
+        encoding="utf-8")
+    lint.fix(wiki, datetime.date(2026, 5, 20))
+    meta = wiki / ".meta"
+    assert (meta / "pages.tsv").exists()
+    assert (meta / "links.tsv").exists()
+    assert "concepts/sgd" in (meta / "pages.tsv").read_text(encoding="utf-8")
