@@ -21,3 +21,16 @@ def test_create_credentials_file_creates_missing_dir(tmp_path):
     # .forge/secrets/ does not exist yet — the function must create it
     rel = bootstrap.create_credentials_file(tmp_path)
     assert (tmp_path / rel).is_file()
+
+
+def test_seed_files_include_feedback(tmp_path):
+    created = bootstrap.create_seed_files(tmp_path, "2026-05-20", "test-domain")
+    assert ".forge/feedback.md" in created
+    content = (tmp_path / ".forge/feedback.md").read_text()
+    assert content.startswith("# .forge/feedback.md")
+
+
+def test_seed_feedback_idempotent(tmp_path):
+    bootstrap.create_seed_files(tmp_path, "2026-05-20", "test-domain")
+    again = bootstrap.create_seed_files(tmp_path, "2026-05-20", "test-domain")
+    assert ".forge/feedback.md" not in again  # already exists, not re-created
