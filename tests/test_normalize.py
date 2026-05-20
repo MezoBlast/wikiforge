@@ -112,3 +112,52 @@ def test_docx_also_routes_to_mineru(tmp_path, monkeypatch):
     monkeypatch.setattr(normalize.subprocess, "run", fake_run)
     out = normalize.normalize_source(docx)
     assert out.read_text() == "# Report"
+
+
+def test_url_routes_to_tvly(tmp_path, monkeypatch):
+    src = tmp_path / "article.url"
+    src.write_text("https://example.com/article\n")
+
+    def fake_run(cmd, **kwargs):
+        assert cmd[0] == "tvly" and cmd[1] == "extract"
+        assert cmd[2] == "https://example.com/article"
+        out = Path(cmd[cmd.index("-o") + 1])
+        out.parent.mkdir(parents=True, exist_ok=True)
+        out.write_text("# Extracted article")
+        return subprocess.CompletedProcess(cmd, 0, "", "")
+
+    monkeypatch.setattr(normalize.subprocess, "run", fake_run)
+    out = normalize.normalize_source(src)
+    assert out == tmp_path / "article.converted" / "article.md"
+    assert out.read_text() == "# Extracted article"
+
+
+def test_url_failure_raises_normalize_error(tmp_path, monkeypatch):
+    src = tmp_path / "article.url"
+    src.write_text("https://example.com\n")
+
+    def fake_run(cmd, **kwargs):
+        return subprocess.CompletedProcess(cmd, 3, "", "auth error")
+
+    monkeypatch.setattr(normalize.subprocess, "run", fake_run)
+    with pytest.raises(normalize.NormalizeError, match="tvly"):
+        normalize.normalize_source(src)
+
+
+def test_url_empty_file_raises(tmp_path):
+    src = tmp_path / "article.url"
+    src.write_text("   \n")
+    with pytest.raises(normalize.NormalizeError, match="no URL"):
+        normalize.normalize_source(src)
+
+
+def test_url_missing_cli_raises(tmp_path, monkeypatch):
+    src = tmp_path / "article.url"
+    src.write_text("https://example.com\n")
+
+    def fake_run(cmd, **kwargs):
+        raise FileNotFoundError("tvly")
+
+    monkeypatch.setattr(normalize.subprocess, "run", fake_run)
+    with pytest.raises(normalize.NormalizeError, match="Tavily CLI"):
+        normalize.normalize_source(src)

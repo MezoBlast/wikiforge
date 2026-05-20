@@ -123,4 +123,30 @@ def _convert_mineru(src, out_dir):
 
 
 def _convert_url(src, out_dir):
-    raise NormalizeError("Tavily path not yet implemented")  # replaced in Task 9
+    """Fetch a saved URL to markdown via the Tavily CLI (`tvly extract`).
+
+    The .url/.weblink file holds the URL on its first non-blank line. tvly reads
+    TAVILY_API_KEY from the environment (placed there by load_credentials()).
+    """
+    lines = [ln.strip() for ln in Path(src).read_text(encoding="utf-8").splitlines()]
+    url = next((ln for ln in lines if ln), "")
+    if not url:
+        raise NormalizeError(f"{src} contains no URL")
+    out_md = out_dir / (Path(src).stem + ".md")
+    try:
+        proc = subprocess.run(
+            ["tvly", "extract", url, "-o", str(out_md)],
+            capture_output=True, text=True,
+        )
+    except FileNotFoundError as e:
+        raise NormalizeError(
+            "the Tavily CLI (`tvly`) is not installed. Install it with "
+            "`curl -fsSL https://cli.tavily.com/install.sh | bash` and set "
+            "TAVILY_API_KEY in .forge/secrets/credentials.env."
+        ) from e
+    if proc.returncode != 0:
+        raise NormalizeError(
+            f"tvly extract failed for {url} (exit {proc.returncode}). "
+            f"Check that TAVILY_API_KEY is set in .forge/secrets/credentials.env. "
+            f"stderr: {proc.stderr.strip()[-300:]}"
+        )
