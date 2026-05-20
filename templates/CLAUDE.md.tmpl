@@ -24,7 +24,7 @@ If symlinks were created during bootstrap, the four skills are also discoverable
 3. **Schema is law.** `schema.md` defines required frontmatter, enum values, and which edge types each page type may declare. The linter will catch violations; aim to pass on first attempt.
 4. **Edge-type vocabulary is fixed at five.** `references`, `extends`, `contradicts`, `supersedes`, `implements`. Do not invent a sixth. When unsure between `references` (default, prose) and a typed edge, prefer plain prose `[[wikilink]]`.
 5. **Raw lives in `raw/`. It never travels into the bundle.** Bundle excerpts are extracted at build time from `raw/repos/<org>/<repo>@<sha>/` and copied to `wiki/snippets/` — never copy raw files into `wiki/` by hand.
-6. **Append-only state.** `wiki/log.md`, `.forge/log.md`, `.forge/queue.md`, `.forge/requests/inbox/`, `.forge/requests/responses/` are append-only. Don't rewrite history.
+6. **Append-only state.** `wiki/log.md`, `.forge/log.md`, `.forge/queue.md`, `.forge/feedback.md`, `.forge/requests/inbox/`, `.forge/requests/responses/` are append-only. Don't rewrite history.
 
 ## What lives where
 
@@ -42,6 +42,7 @@ raw/                   # immutable sources (papers, repos, web clips, notes)
   skills/              # ingest, query, lint, explorer, request-human
   lib/                 # Python helpers
   queue.md             # ingest queue
+  feedback.md          # query-gap log; harvested by explorer
   log.md               # curator-side operation log
   requests/inbox/      # agent → human asks
   requests/responses/  # human → agent responses
