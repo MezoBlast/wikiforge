@@ -15,7 +15,9 @@ from pathlib import Path
 import frontmatter
 
 QUEUE_STATES = {" ", "~", "x", "!"}  # pending, in-progress, done, blocked
-QUEUE_ENTRY_RE = re.compile(r"^- \[(?P<state>.)\]\s+(?P<path>\S+)(?:\s*\|\s*(?P<note>.*))?$")
+# path is non-greedy so source paths containing spaces are captured whole;
+# the optional ` | <note>` suffix still separates correctly.
+QUEUE_ENTRY_RE = re.compile(r"^- \[(?P<state>.)\]\s+(?P<path>.+?)(?:\s*\|\s*(?P<note>.*))?$")
 
 QUEUE_HEADER = (
     "# .forge/queue.md — append-only ingest queue\n"

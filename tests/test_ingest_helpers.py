@@ -95,3 +95,23 @@ def test_find_ingested_source_missing_dir(tmp_path):
 def test_find_ingested_source_requires_a_key(tmp_path):
     with pytest.raises(ValueError):
         ih.find_ingested_source(tmp_path)
+
+
+def test_queue_handles_path_with_spaces(tmp_path):
+    q = tmp_path / "queue.md"
+    spaced = "raw/web/Tuna-2_ Pixel Embeddings Beat Vision Encoders.html"
+    ih.append_queue_entry(q, spaced)
+    entries = list(ih.parse_queue(q))
+    assert len(entries) == 1
+    assert entries[0][2] == spaced
+    assert entries[0][3] == ""  # the spaces are not mis-parsed as a note
+    ih.set_queue_state(q, spaced, "x")
+    assert list(ih.parse_queue(q))[0][1] == "x"
+
+
+def test_queue_spaced_path_keeps_note_separate(tmp_path):
+    q = tmp_path / "queue.md"
+    spaced = "raw/web/a b c.html"
+    ih.append_queue_entry(q, spaced, note="req 2026-05-20-001")
+    _, state, path, note = list(ih.parse_queue(q))[0]
+    assert path == spaced and note == "req 2026-05-20-001"
