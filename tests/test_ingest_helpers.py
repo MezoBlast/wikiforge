@@ -49,3 +49,49 @@ def test_scan_raw_finds_files_and_repos(tmp_path):
     assert not any(".gitkeep" in f for f in found)
     # the repo's inner files are NOT yielded individually
     assert str(repo / "README.md") not in found
+
+
+def _write_source_page(dir_path, name, content_hash, source_path):
+    page = dir_path / name
+    page.write_text(
+        "---\n"
+        f"title: {name}\n"
+        "type: source\n"
+        "created: 2026-01-01\n"
+        "last_verified: 2026-01-01\n"
+        "confidence: likely\n"
+        "source_type: paper\n"
+        f"source_path: {source_path}\n"
+        f"content_hash: {content_hash}\n"
+        "---\n\nbody\n",
+        encoding="utf-8",
+    )
+
+
+def test_find_ingested_source_by_hash(tmp_path):
+    src = tmp_path / "wiki/sources"
+    src.mkdir(parents=True)
+    _write_source_page(src, "foo.md", "sha256:abc123", "raw/papers/foo.pdf")
+    hit = ih.find_ingested_source(tmp_path, content_hash="sha256:abc123")
+    assert hit is not None
+    slug, fm = hit
+    assert slug == "sources/foo"
+    assert fm["source_path"] == "raw/papers/foo.pdf"
+    assert ih.find_ingested_source(tmp_path, content_hash="sha256:zzz") is None
+
+
+def test_find_ingested_source_by_path(tmp_path):
+    src = tmp_path / "wiki/sources"
+    src.mkdir(parents=True)
+    _write_source_page(src, "foo.md", "sha256:abc123", "raw/papers/foo.pdf")
+    hit = ih.find_ingested_source(tmp_path, source_path="raw/papers/foo.pdf")
+    assert hit is not None and hit[0] == "sources/foo"
+
+
+def test_find_ingested_source_missing_dir(tmp_path):
+    assert ih.find_ingested_source(tmp_path, content_hash="sha256:abc") is None
+
+
+def test_find_ingested_source_requires_a_key(tmp_path):
+    with pytest.raises(ValueError):
+        ih.find_ingested_source(tmp_path)

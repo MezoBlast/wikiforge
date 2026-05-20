@@ -12,6 +12,8 @@ import hashlib
 import re
 from pathlib import Path
 
+import frontmatter
+
 QUEUE_STATES = {" ", "~", "x", "!"}  # pending, in-progress, done, blocked
 QUEUE_ENTRY_RE = re.compile(r"^- \[(?P<state>.)\]\s+(?P<path>\S+)(?:\s*\|\s*(?P<note>.*))?$")
 
@@ -133,6 +135,34 @@ def scan_raw(workspace_root="."):
             for repo in sorted(d for d in org.iterdir()
                                if d.is_dir() and "@" in d.name):
                 yield repo
+
+
+def find_ingested_source(workspace_root=".", content_hash=None, source_path=None):
+    """Find a previously-ingested source page in wiki/sources/.
+
+    Searches every wiki/sources/*.md for a page whose frontmatter `content_hash`
+    or `source_path` matches the argument given. Returns (slug, frontmatter_dict)
+    for the first match, or None.
+
+    `slug` is the page path inside wiki/ minus the .md suffix, e.g. "sources/foo".
+    At least one of content_hash / source_path must be supplied.
+    """
+    if content_hash is None and source_path is None:
+        raise ValueError("provide content_hash or source_path")
+    wiki = Path(workspace_root) / "wiki"
+    src_dir = wiki / "sources"
+    if not src_dir.is_dir():
+        return None
+    for page in sorted(src_dir.rglob("*.md")):
+        try:
+            fm, _ = frontmatter.load(page)
+        except frontmatter.FrontmatterError:
+            continue
+        if content_hash is not None and fm.get("content_hash") == content_hash:
+            return str(page.relative_to(wiki).with_suffix("")), fm
+        if source_path is not None and fm.get("source_path") == source_path:
+            return str(page.relative_to(wiki).with_suffix("")), fm
+    return None
 
 
 def parse_queue(queue_path):
