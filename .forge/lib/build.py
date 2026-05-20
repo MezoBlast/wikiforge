@@ -16,9 +16,9 @@ sys.path.insert(0, str(Path(__file__).parent))
 
 import schema_spec as S
 import frontmatter as FM
-import wikilinks as WL
 import provenance as PR
 import lint as LINT
+import index
 
 
 # meta files that ship in the bundle (log.md is curator-side only)
@@ -35,27 +35,6 @@ def run_lint(wiki_dir, raw_dir):
         raise SystemExit(f"build aborted: {len(errs)} lint error(s)")
 
 
-def load_pages(wiki_dir):
-    """Yield (slug, page_type, fm, body) for every page under wiki/.
-
-    For meta files, page_type is None and fm is None.
-    """
-    for md in sorted(wiki_dir.rglob("*.md")):
-        if ".meta" in md.parts:
-            continue
-        rel = md.relative_to(wiki_dir).with_suffix("")
-        slug = rel.as_posix()
-        if slug in S.META_FILES:
-            yield slug, None, None, md.read_text(encoding="utf-8")
-            continue
-        try:
-            fm, body = FM.load(md)
-        except FM.FrontmatterError:
-            continue  # lint already flagged it
-        page_type = S.DIR_TYPES.get(slug.split("/", 1)[0])
-        yield slug, page_type, fm, body
-
-
 def should_drop(slug, page_type, fm, drop_placeholder):
     if page_type is None:
         return False
@@ -66,63 +45,6 @@ def should_drop(slug, page_type, fm, drop_placeholder):
     if drop_placeholder and fm.get("confidence") == "placeholder":
         return True
     return False
-
-
-def write_pages_tsv(out_meta, kept):
-    rows = ["path\ttitle\ttype\ttags\tlast_verified\tconfidence"]
-    for slug, pt, fm, _ in kept:
-        if pt is None:
-            continue
-        title = str(fm.get("title", slug)).replace("\t", " ").replace("\n", " ")
-        tags = ",".join(str(t) for t in (fm.get("tags") or []))
-        lv = fm.get("last_verified")
-        if isinstance(lv, datetime.date):
-            lv = lv.isoformat()
-        conf = fm.get("confidence", "")
-        rows.append(f"{slug}\t{title}\t{pt}\t{tags}\t{lv}\t{conf}")
-    (out_meta / "pages.tsv").write_text("\n".join(rows) + "\n", encoding="utf-8")
-
-
-def write_links_tsv(out_meta, kept, kept_slugs):
-    """Build links.tsv. Frontmatter typed edges win over prose for the same pair."""
-    basename_index = {}
-    for slug in kept_slugs:
-        bn = slug.rsplit("/", 1)[-1]
-        basename_index.setdefault(bn, []).append(slug)
-
-    def resolve(target):
-        return WL.resolve(WL.normalize_target(target), kept_slugs, basename_index)
-
-    typed = {}        # (from, to) -> edge_type
-    prose = set()     # (from, to) for references
-
-    for slug, _, fm, body in kept:
-        if isinstance(fm, dict):
-            for edge, target in WL.extract_frontmatter_edges(fm):
-                if edge not in S.EDGE_TYPES:
-                    raise SystemExit(
-                        f"unknown-edge-type: {slug} declares {edge!r}; "
-                        f"vocabulary is {sorted(S.EDGE_TYPES)}"
-                    )
-                resolved = resolve(target)
-                if resolved:
-                    typed[(slug, resolved)] = edge
-        if isinstance(body, str):
-            for raw in WL.extract_prose_links(body):
-                resolved = resolve(raw)
-                if resolved:
-                    prose.add((slug, resolved))
-
-    rows = ["from\tto\tedge_type"]
-    seen = set()
-    for (f, t), edge in sorted(typed.items()):
-        rows.append(f"{f}\t{t}\t{edge}")
-        seen.add((f, t))
-    for (f, t) in sorted(prose):
-        if (f, t) in seen:
-            continue
-        rows.append(f"{f}\t{t}\treferences")
-    (out_meta / "links.tsv").write_text("\n".join(rows) + "\n", encoding="utf-8")
 
 
 def copy_snippets(raw_dir, kept, out_snippets):
@@ -194,7 +116,7 @@ def build(workspace, version, drop_placeholder, do_tar):
     out_meta = out_wiki / ".meta"
     out_meta.mkdir()
 
-    all_pages = list(load_pages(wiki_dir))
+    all_pages = list(index.load_pages(wiki_dir))
     kept = [p for p in all_pages if not should_drop(p[0], p[1], p[2], drop_placeholder)]
     kept_slugs = {slug for slug, pt, _, _ in kept if pt is not None}
     n_dropped = len(all_pages) - len(kept)
@@ -211,8 +133,8 @@ def build(workspace, version, drop_placeholder, do_tar):
         out_path.write_text(FM.dump(fm, body), encoding="utf-8")
 
     print("==> indexing")
-    write_pages_tsv(out_meta, kept)
-    write_links_tsv(out_meta, kept, kept_slugs)
+    index.write_pages_tsv(out_meta, kept)
+    index.write_links_tsv(out_meta, kept, kept_slugs)
 
     print("==> extracting snippets")
     copy_snippets(raw_dir, kept, out_wiki / "snippets")
