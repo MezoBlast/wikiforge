@@ -94,6 +94,47 @@ def enumerate_repo_files(repo_root, max_files=200):
     return combined[:max_files]
 
 
+RAW_FILE_TYPES = ("papers", "docs", "web", "notes")
+SOURCE_EXTS = {
+    ".pdf", ".docx", ".pptx", ".xls", ".xlsx",
+    ".html", ".htm", ".url", ".weblink",
+    ".md", ".markdown", ".txt",
+}
+
+
+def scan_raw(workspace_root="."):
+    """Yield Paths of candidate raw sources under `raw/`.
+
+    Files: any file with a recognized extension under raw/{papers,docs,web,
+    notes}/ (recursively), skipping dotfiles and anything inside a `.converted/`
+    output directory.
+
+    Repos: each raw/repos/<org>/<repo>@<sha>/ directory, yielded whole — a repo
+    is one ingestion unit, not a file-per-file scan.
+    """
+    root = Path(workspace_root)
+    for rtype in RAW_FILE_TYPES:
+        base = root / "raw" / rtype
+        if not base.is_dir():
+            continue
+        for f in sorted(base.rglob("*")):
+            if not f.is_file():
+                continue
+            rel_parts = f.relative_to(base).parts
+            if any(part.startswith(".") or part.endswith(".converted")
+                   for part in rel_parts):
+                continue
+            if f.suffix.lower() in SOURCE_EXTS:
+                yield f
+    repos_base = root / "raw" / "repos"
+    if repos_base.is_dir():
+        for org in sorted(d for d in repos_base.iterdir()
+                          if d.is_dir() and not d.name.startswith(".")):
+            for repo in sorted(d for d in org.iterdir()
+                               if d.is_dir() and "@" in d.name):
+                yield repo
+
+
 def parse_queue(queue_path):
     """Yield (line_number, state, source_path, note) for each entry in queue.md.
 
