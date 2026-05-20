@@ -25,6 +25,8 @@ from ingest_helpers import content_hash
 h = content_hash("raw/papers/foo.pdf")          # "sha256:abc123..."
 ```
 
+`content_hash` accepts a file *or* a repo directory — for a `raw/repos/<org>/<repo>@<sha>/` directory it hashes a manifest of the contained files (relative paths + sizes, `.git` excluded), so repos dedup exactly like every other source.
+
 Use `ingest_helpers.find_ingested_source(content_hash=h)` to look for an existing `wiki/sources/` page with that hash (it also accepts `source_path=` to match by raw path):
 
 ```python
@@ -191,6 +193,12 @@ Rules the linter enforces — get these right up front:
   collide (`duplicate-slug` error).
 - `confidence` is honest: a single source supports `likely` at best; unverified
   synthesis is `low`; a stub pending more reading is `placeholder`.
+
+On a `claim`, `confidence` and `status` are independent axes. `confidence` is
+how sure you are the page is *accurate as written*; `status` is the claim's
+standing *in the field* (`validated` | `likely` | `open` | `refuted`). A page
+that accurately documents a genuine `open` controversy can still be
+`confidence: verified` — do not force the two values to track each other.
 
 ## Lint before you stop
 

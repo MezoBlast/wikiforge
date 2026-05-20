@@ -115,3 +115,43 @@ def test_queue_spaced_path_keeps_note_separate(tmp_path):
     ih.append_queue_entry(q, spaced, note="req 2026-05-20-001")
     _, state, path, note = list(ih.parse_queue(q))[0]
     assert path == spaced and note == "req 2026-05-20-001"
+
+
+def test_content_hash_file(tmp_path):
+    f = tmp_path / "a.txt"
+    f.write_bytes(b"hello world")
+    h = ih.content_hash(f)
+    assert h.startswith("sha256:")
+    assert len(h) == len("sha256:") + 16
+    assert ih.content_hash(f) == h  # deterministic
+
+
+def test_content_hash_directory_is_deterministic(tmp_path):
+    repo = tmp_path / "org" / "repo@abc123"
+    (repo / "src").mkdir(parents=True)
+    (repo / "README.md").write_text("readme")
+    (repo / "src" / "main.py").write_text("print(1)")
+    h1 = ih.content_hash(repo)
+    h2 = ih.content_hash(repo)
+    assert h1 == h2 and h1.startswith("sha256:")
+
+
+def test_content_hash_directory_differs_from_other_dir(tmp_path):
+    a = tmp_path / "a@1"
+    b = tmp_path / "b@1"
+    a.mkdir()
+    b.mkdir()
+    (a / "f.txt").write_text("one")
+    (b / "f.txt").write_text("a much longer file body")
+    assert ih.content_hash(a) != ih.content_hash(b)
+
+
+def test_content_hash_directory_ignores_git(tmp_path):
+    repo = tmp_path / "repo@abc"
+    repo.mkdir()
+    (repo / "README.md").write_text("x")
+    before = ih.content_hash(repo)
+    gitdir = repo / ".git"
+    gitdir.mkdir()
+    (gitdir / "HEAD").write_text("ref: refs/heads/main")
+    assert ih.content_hash(repo) == before  # .git changes don't affect the hash

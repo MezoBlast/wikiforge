@@ -27,11 +27,28 @@ QUEUE_HEADER = (
 
 
 def content_hash(path, length=16):
-    """Return 'sha256:<first-length-hex-chars>' for the file at path."""
+    """Return 'sha256:<first-length-hex-chars>' identifying the source at path.
+
+    For a file, hashes its bytes. For a directory (a cloned repo), hashes a
+    manifest of every contained file's relative path and size — deterministic
+    and fast (no file reads), and stable for a commit-pinned checkout. The
+    `.git` directory is excluded so the hash reflects source content only.
+    """
     h = hashlib.sha256()
-    with open(path, "rb") as fh:
-        for chunk in iter(lambda: fh.read(65536), b""):
-            h.update(chunk)
+    p = Path(path)
+    if p.is_dir():
+        for f in sorted(p.rglob("*")):
+            rel = f.relative_to(p)
+            if ".git" in rel.parts or not f.is_file():
+                continue
+            h.update(str(rel).encode("utf-8"))
+            h.update(b"\0")
+            h.update(str(f.stat().st_size).encode("utf-8"))
+            h.update(b"\n")
+    else:
+        with open(p, "rb") as fh:
+            for chunk in iter(lambda: fh.read(65536), b""):
+                h.update(chunk)
     return f"sha256:{h.hexdigest()[:length]}"
 
 
