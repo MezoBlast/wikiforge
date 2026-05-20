@@ -21,7 +21,7 @@ Anything that falls under a listed exclusion is dead to you for this run, even i
 
 ### 1. Identify candidate sources
 
-Three signal sources, in priority order:
+Four signal sources, in priority order:
 
 **a) Lint errors and warnings.** Run:
 
@@ -38,6 +38,13 @@ Look for:
 
 **c) Citation chains.** Walk every `wiki/sources/<slug>.md` and collect external references mentioned in the body (cited papers by name/DOI, linked repos, doc URLs). For each candidate target, count how many existing source pages mention it. This count is the **co-citation score**.
 
+**d) Curator query gaps.** Read `.forge/feedback.md` if it exists. The `query`
+skill appends a `query-gap` entry there whenever the wiki could not answer a
+question. Each entry is tagged `severity: hard` (no page covered it) or
+`severity: weak` (answered only from `low`/`placeholder` pages). **Always
+eligible.** Skip any entry whose question already appears in a prior
+`## explorer plan` block in `.forge/log.md` — it has been slated before.
+
 ### 2. Plan a bounded slate (do this before any fetch)
 
 For every candidate from step 1, compute a priority score and write it as a checklist to `.forge/log.md` under a new `## explorer plan` heading. The act of writing the plan IS the planning pass — once written, you commit to fetching exactly that slate, nothing more.
@@ -48,6 +55,8 @@ For every candidate from step 1, compute a priority score and write it as a chec
 | ------------------------------------------------------------------------ | ----- |
 | Closes a `code-pattern-missing-provenance` or `excerpt-missing` error    | 100   |
 | Named in consumer `feedback.md`                                          | 70    |
+| Named in a `query-gap` entry, `severity: hard`                           | 70    |
+| Named in a `query-gap` entry, `severity: weak`                           | 25    |
 | Citation-chain target with co-citation score ≥ 3                         | 50    |
 | Citation-chain target with co-citation score = 2                         | 30    |
 | Citation-chain target with co-citation score = 1                         | 10 — usually defer |
