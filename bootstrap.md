@@ -8,7 +8,7 @@ This runbook is imperative and **self-contained** — you do not need any other 
 
 - `git`, `git-lfs`, `python3` are installed and on `PATH`.
 - `pip install -r requirements.txt` has been run (pulls in `pyyaml`).
-- You are on a clean working tree (a fresh clone). You may be on `master` or on a branch you created for this run — Step 9 handles both.
+- You are on a clean working tree (a fresh clone). You may be on `master` or on a branch you created for this run — Step 10 handles both.
 - A human is available for a short synchronous interview (Step 2). This is the **only** synchronous human interaction in the entire wikiforge lifecycle.
 
 Step 1 opens with a preflight probe that enforces the first two items. Do not skip it: a missing `git-lfs` otherwise surfaces only at Step 5, *after* the human has already answered all five interview questions.
@@ -196,7 +196,45 @@ If the human pastes a malformed URL, re-prompt up to 3 times then store as-is wi
 echo "## [$(date -u +%Y-%m-%dT%H:%M:%SZ)] step-7 complete (channels: <list-or-none>)" >> .forge/bootstrap.log
 ```
 
-### Step 8 — Verify the empty workspace
+### Step 8 — Configure tool credentials (optional)
+
+ingest and explorer call external tools to turn raw sources into markdown:
+MinerU (PDF / Office → markdown) and the Tavily CLI (web URL → markdown). Both
+have free tiers; API tokens unlock higher limits. Credentials live in
+`.forge/secrets/credentials.env` — gitignored, local-only, never committed.
+Step 3 seeded that file with a commented template.
+
+Ask the human:
+
+"Configure tool credentials now? (y/n, default n — you can edit
+`.forge/secrets/credentials.env` by hand anytime later.)"
+
+- **No / skip** → leave the seeded template as-is (all keys commented out;
+  ingest falls back to free-tier tooling). Proceed.
+- **Yes** → walk the human through each credential, one at a time. For each
+  value the human provides, uncomment-and-fill the matching line in
+  `.forge/secrets/credentials.env` (or append a new `KEY=value` line). Print
+  the key *name* back for confirmation — never the value.
+
+  1. **MinerU API token** — "Paste your MinerU API token (unlocks 200MB / 200
+     pages per file), or press enter to skip (free tier: 10MB / 20 pages)."
+     On a value, set `MINERU_API_TOKEN=<value>`.
+  2. **Tavily API key** — "Paste your Tavily API key (`tvly-...`, used to fetch
+     web sources), or press enter to skip." On a value, set
+     `TAVILY_API_KEY=<value>`.
+  3. **Additional credentials** — "Any other tool credentials to add now
+     (audio transcription, OCR, ...)? Enter as `KEY=value`, or blank to
+     finish." Loop, appending each line, until the human enters a blank line.
+
+Credentials are optional and **not** a contract invariant — like notifications
+(Step 7), this step exists so the human is not surprised later, and changes
+nothing if skipped. The file is freely re-editable after bootstrap.
+
+```sh
+echo "## [$(date -u +%Y-%m-%dT%H:%M:%SZ)] step-8 complete (credentials: <key-names-or-none>)" >> .forge/bootstrap.log
+```
+
+### Step 9 — Verify the empty workspace
 
 ```sh
 python3 .forge/lib/lint.py --strict
@@ -204,13 +242,13 @@ python3 .forge/lib/lint.py --strict
 
 Expected output: `0 error(s), 0 warning(s)` on the seeded pages (manifest, index, out_of_scope; `log.md` and other meta files do not count toward the page total).
 
-If lint fails: stop. Either the templates have a bug, the substitution produced invalid frontmatter, or the linter has a regression. Report which page failed which check. Do not proceed to Step 9 — a failed lint here means the workspace cannot be trusted as a clean foundation.
+If lint fails: stop. Either the templates have a bug, the substitution produced invalid frontmatter, or the linter has a regression. Report which page failed which check. Do not proceed to Step 10 — a failed lint here means the workspace cannot be trusted as a clean foundation.
 
 ```sh
-echo "## [$(date -u +%Y-%m-%dT%H:%M:%SZ)] step-8 complete (lint: 0/0)" >> .forge/bootstrap.log
+echo "## [$(date -u +%Y-%m-%dT%H:%M:%SZ)] step-9 complete (lint: 0/0)" >> .forge/bootstrap.log
 ```
 
-### Step 9 — Branch, finalize, commit
+### Step 10 — Branch, finalize, commit
 
 This is where bootstrap diverges from master. Master stays pristine; the initialized state goes on a branch.
 
@@ -266,7 +304,7 @@ This split is intentional: substantive wiki content travels with the branch; age
 
 If the rename or commit fails, stop. Do not commit a partial state. The human can manually recover.
 
-### Step 10 — Brief the human
+### Step 11 — Brief the human
 
 Print exactly this message (substituting `<domain>` and `<branch>`):
 
@@ -283,6 +321,9 @@ Next:
 Git remote: not configured. To back this up, run:
     git remote add origin <url>
     git push -u origin <branch>
+
+Tool credentials: edit .forge/secrets/credentials.env to add MinerU / Tavily
+API keys (or any other tool tokens) — ingest works without them on free tiers.
 
 Ongoing reference: README.md (overview), CLAUDE.md/AGENTS.md/GEMINI.md (skills),
 schema.md (page-type spec).
