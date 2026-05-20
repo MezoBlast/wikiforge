@@ -4,3 +4,7 @@
 # Bundle consumers need none of this — the bundle is pure POSIX shell + markdown.
 
 pyyaml>=6.0
+markdownify>=0.11    # raw/web/*.html -> markdown, used by .forge/lib/normalize.py
+
+# Development / tests only.
+pytest>=7.0
