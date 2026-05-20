@@ -1,3 +1,5 @@
+from pathlib import Path
+
 import pytest
 
 import normalize
@@ -61,3 +63,52 @@ def test_html_force_reconverts(tmp_path):
     second = normalize.normalize_source(page, force=True)
     assert "STALE" not in second.read_text()
     assert "X" in second.read_text()
+
+
+import subprocess
+
+
+def test_pdf_routes_to_mineru(tmp_path, monkeypatch):
+    pdf = tmp_path / "doc.pdf"
+    pdf.write_bytes(b"%PDF-1.4 fake")
+    calls = []
+
+    def fake_run(cmd, **kwargs):
+        calls.append(cmd)
+        out_dir = Path(cmd[cmd.index("-o") + 1])
+        out_dir.mkdir(parents=True, exist_ok=True)
+        (out_dir / "doc.md").write_text("# Converted by MinerU")
+        return subprocess.CompletedProcess(cmd, 0, "", "")
+
+    monkeypatch.setattr(normalize.subprocess, "run", fake_run)
+    out = normalize.normalize_source(pdf)
+    assert out == tmp_path / "doc.converted" / "doc.md"
+    assert out.read_text() == "# Converted by MinerU"
+    assert any("mineru_api.py" in str(part) for part in calls[0])
+
+
+def test_pdf_failure_raises_normalize_error(tmp_path, monkeypatch):
+    pdf = tmp_path / "doc.pdf"
+    pdf.write_bytes(b"%PDF fake")
+
+    def fake_run(cmd, **kwargs):
+        return subprocess.CompletedProcess(cmd, 1, "", "File too large (12.0MB > 10MB).")
+
+    monkeypatch.setattr(normalize.subprocess, "run", fake_run)
+    with pytest.raises(normalize.NormalizeError, match="MinerU"):
+        normalize.normalize_source(pdf)
+
+
+def test_docx_also_routes_to_mineru(tmp_path, monkeypatch):
+    docx = tmp_path / "report.docx"
+    docx.write_bytes(b"PK fake docx")
+
+    def fake_run(cmd, **kwargs):
+        out_dir = Path(cmd[cmd.index("-o") + 1])
+        out_dir.mkdir(parents=True, exist_ok=True)
+        (out_dir / "report.md").write_text("# Report")
+        return subprocess.CompletedProcess(cmd, 0, "", "")
+
+    monkeypatch.setattr(normalize.subprocess, "run", fake_run)
+    out = normalize.normalize_source(docx)
+    assert out.read_text() == "# Report"

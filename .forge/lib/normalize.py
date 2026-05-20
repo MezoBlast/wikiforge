@@ -105,7 +105,21 @@ def normalize_source(raw_path, force=False):
 
 
 def _convert_mineru(src, out_dir):
-    raise NormalizeError("MinerU path not yet implemented")  # replaced in Task 8
+    """Convert a PDF or Office file via the vendored MinerU CLI.
+
+    MinerU writes <stem>.md (and an images/ subdir) into out_dir. Uses the free
+    agent API unless MINERU_API_TOKEN is set, which load_credentials() will have
+    placed in the environment for the subprocess to inherit.
+    """
+    cmd = [sys.executable, str(_MINERU), str(src), "-o", str(out_dir)]
+    proc = subprocess.run(cmd, capture_output=True, text=True)
+    if proc.returncode != 0:
+        raise NormalizeError(
+            f"MinerU conversion failed for {src} (exit {proc.returncode}). "
+            f"For PDFs over the free-tier limit (10MB / 20 pages), set "
+            f"MINERU_API_TOKEN in .forge/secrets/credentials.env. "
+            f"stderr: {proc.stderr.strip()[-500:]}"
+        )
 
 
 def _convert_url(src, out_dir):
