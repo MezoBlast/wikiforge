@@ -158,10 +158,28 @@ def check_code_pattern_excerpt(slug, fm, raw_dir, issues):
             f"raw/repos/{repo}@{commit}/{path} does not exist"))
 
 
+def check_stale_index(wiki_dir, issues):
+    """Warn if wiki/.meta/pages.tsv is missing or older than the newest page."""
+    meta = wiki_dir / ".meta" / "pages.tsv"
+    newest = 0.0
+    for md in wiki_dir.rglob("*.md"):
+        if ".meta" in md.parts:
+            continue
+        newest = max(newest, md.stat().st_mtime)
+    if not meta.exists():
+        issues.append(Issue(WARNING, "stale-index", ".meta/pages.tsv",
+            "wiki/.meta/ index missing — run python3 .forge/lib/lint.py --fix"))
+        return
+    if meta.stat().st_mtime < newest:
+        issues.append(Issue(WARNING, "stale-index", ".meta/pages.tsv",
+            "index older than newest wiki page — run python3 .forge/lib/lint.py --fix"))
+
+
 def lint(wiki_dir, raw_dir, stale_days, rot_days, today):
     issues = []
     pages = discover_pages(wiki_dir)
     valid_slugs, basename_index, fm_map = build_indices(pages)
+    check_stale_index(wiki_dir, issues)
 
     # duplicate-slug across types
     for bn, slugs in basename_index.items():
