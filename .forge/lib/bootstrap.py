@@ -6,8 +6,8 @@ collecting Q1-Q5 answers it pipes a JSON object to this script, which:
 
   1. Walks every `.tmpl` file under `templates/`, substitutes the placeholders,
      writes to the corresponding target path, and removes the `.tmpl` suffix.
-  2. Creates the seed empty append-only files (`wiki/index.md`, `wiki/log.md`,
-     `.forge/queue.md`, `.forge/log.md`) with header lines.
+  2. Creates the seed append-only files (`wiki/index.md`, `wiki/log.md`,
+     `.forge/queue.md`, `.forge/log.md`, `.forge/feedback.md`) with header lines.
   3. Creates the empty directories required by the workspace layout
      (raw/, wiki/<types>/, .forge/requests/, .forge/secrets/).
   4. Optionally creates `.claude/skills/wikiforge-*` symlinks pointing at the
@@ -186,6 +186,11 @@ SEED_FILES = {
         "# .forge/log.md — append-only curator-side operation log\n"
         "\n"
         "## [{today}T00:00:00Z] bootstrap | workspace created\n"
+    ),
+    ".forge/feedback.md": (
+        "# .forge/feedback.md — append-only curator feedback log\n"
+        "<!-- query appends query-gap entries here; explorer harvests them. -->\n"
+        "<!-- See .forge/skills/query/SKILL.md for the entry format. -->\n"
     ),
 }
 

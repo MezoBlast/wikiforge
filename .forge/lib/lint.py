@@ -17,6 +17,7 @@ sys.path.insert(0, str(Path(__file__).parent))
 import schema_spec as S
 import frontmatter as FM
 import wikilinks as WL
+import index
 
 ERROR = "error"
 WARNING = "warning"
@@ -158,10 +159,28 @@ def check_code_pattern_excerpt(slug, fm, raw_dir, issues):
             f"raw/repos/{repo}@{commit}/{path} does not exist"))
 
 
+def check_stale_index(wiki_dir, issues):
+    """Warn if wiki/.meta/pages.tsv is missing or older than the newest page."""
+    meta = wiki_dir / ".meta" / "pages.tsv"
+    newest = 0.0
+    for md in wiki_dir.rglob("*.md"):
+        if ".meta" in md.parts:
+            continue
+        newest = max(newest, md.stat().st_mtime)
+    if not meta.exists():
+        issues.append(Issue(WARNING, "stale-index", ".meta/pages.tsv",
+            "wiki/.meta/ index missing — run python3 .forge/lib/lint.py --fix"))
+        return
+    if meta.stat().st_mtime < newest:
+        issues.append(Issue(WARNING, "stale-index", ".meta/pages.tsv",
+            "index older than newest wiki page — run python3 .forge/lib/lint.py --fix"))
+
+
 def lint(wiki_dir, raw_dir, stale_days, rot_days, today):
     issues = []
     pages = discover_pages(wiki_dir)
     valid_slugs, basename_index, fm_map = build_indices(pages)
+    check_stale_index(wiki_dir, issues)
 
     # duplicate-slug across types
     for bn, slugs in basename_index.items():
@@ -290,7 +309,7 @@ def lint(wiki_dir, raw_dir, stale_days, rot_days, today):
 
 
 def fix(wiki_dir, today):
-    """Conservative auto-fix: rebuild index.md from current pages."""
+    """Conservative auto-fix: rebuild index.md and wiki/.meta/ from current pages."""
     pages = discover_pages(wiki_dir)
     by_type = {}
     for slug, _, fm, _ in pages:
@@ -328,6 +347,9 @@ def fix(wiki_dir, today):
 
     (wiki_dir / "index.md").write_text("\n".join(lines).rstrip() + "\n", encoding="utf-8")
     print(f"rebuilt {wiki_dir / 'index.md'}")
+    meta_dir = wiki_dir / ".meta"
+    index.write_meta(meta_dir, index.load_pages(wiki_dir))
+    print(f"rebuilt {meta_dir}")
 
 
 def main():
@@ -338,7 +360,7 @@ def main():
     g.add_argument("--strict", action="store_true",
                    help="print issues, exit non-zero on any error")
     g.add_argument("--fix", action="store_true",
-                   help="conservatively rebuild index.md")
+                   help="conservatively rebuild index.md and wiki/.meta/")
     p.add_argument("--wiki", default="wiki", help="path to wiki dir (default: wiki)")
     p.add_argument("--raw", default="raw", help="path to raw dir (default: raw)")
     p.add_argument("--stale-days", type=int, default=S.STALE_DAYS)

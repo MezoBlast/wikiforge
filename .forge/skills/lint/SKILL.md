@@ -23,7 +23,7 @@ From the workspace root:
 ```sh
 python3 .forge/lib/lint.py --report       # print issues, exit 0 (default)
 python3 .forge/lib/lint.py --strict       # exit non-zero on any error; used by build.sh
-python3 .forge/lib/lint.py --fix          # rebuild index.md from current pages
+python3 .forge/lib/lint.py --fix          # rebuild index.md and wiki/.meta/ from current pages
 ```
 
 Optional flags:
@@ -61,12 +61,13 @@ The full set of rule codes:
 | `superseded-not-stale`            | warning  | A page is named in another's `supersedes:` but still looks fresh.          |
 | `contradicts-asymmetric`          | warning  | A `contradicts:` declaration has no matching back-reference on the target. |
 | `claim-supports-without-evidence` | warning  | claim has `extends:` but empty `evidence:`.                                 |
+| `stale-index`                     | warning  | `wiki/.meta/` index is missing or older than the newest page.              |
 
 ## Decisions, not rules
 
 - Errors block the build. Fix them or annotate the page with `draft: true` to exclude it from the build (and then come back to it).
 - Warnings are advisory. A long-standing `placeholder` or `orphan` may be intentional — for those, you'll iterate based on `dashboards/low-confidence.md` and `dashboards/orphans.md`, not by chasing every lint warning.
-- `--fix` is conservative: it rebuilds `index.md` from the current page set. It does not delete pages, does not silently mutate frontmatter, and does not move files.
+- `--fix` is conservative: it rebuilds `index.md` and the `wiki/.meta/` index (`pages.tsv`, `links.tsv`) from the current page set. It does not delete pages, does not silently mutate frontmatter, and does not move files. `--fix` is the on-demand way to clear a `stale-index` warning.
 
 ## What to do after a lint run
 
