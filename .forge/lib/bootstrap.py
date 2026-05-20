@@ -12,6 +12,8 @@ collecting Q1-Q5 answers it pipes a JSON object to this script, which:
      (raw/, wiki/<types>/, .forge/requests/, .forge/secrets/).
   4. Optionally creates `.claude/skills/wikiforge-*` symlinks pointing at the
      skill directories under `.forge/skills/`.
+  5. Seeds `.forge/secrets/credentials.env` with a commented template for tool
+     credentials (MinerU, Tavily, and any future tools).
 
 Input format (JSON on stdin):
 
@@ -200,6 +202,42 @@ def create_seed_files(workspace, today, domain):
     return created
 
 
+CREDENTIALS_TEMPLATE = """\
+# .forge/secrets/credentials.env — local-only tool credentials (gitignored).
+#
+# Format: KEY=value, one per line. Loaded into the environment by
+# .forge/lib/credentials.py before ingest/explorer invoke external tools.
+# Blank lines and #-comments are ignored. A real environment variable of the
+# same name always overrides the value here.
+#
+# Uncomment and fill the lines for the tools you use. Add new KEY=value lines
+# for any other credentialed tool (audio transcription, OCR, ...) — the loader
+# passes through every key it finds; no code change is needed.
+
+# MinerU precision PDF/Office API (optional). Without a token, ingest uses the
+# free agent API: 10MB / 20 pages per file. Token: https://mineru.net/
+# MINERU_API_TOKEN=
+
+# Tavily web extraction, used to fetch raw/web/*.url sources to markdown via the
+# `tvly` CLI. Key: https://tavily.com/
+# TAVILY_API_KEY=
+"""
+
+
+def create_credentials_file(workspace):
+    """Seed .forge/secrets/credentials.env with the commented template.
+
+    Returns the workspace-relative path string if the file was created, or None
+    if it already existed (idempotent — never clobbers a filled-in file).
+    """
+    p = workspace / ".forge" / "secrets" / "credentials.env"
+    if p.exists():
+        return None
+    p.parent.mkdir(parents=True, exist_ok=True)
+    p.write_text(CREDENTIALS_TEMPLATE, encoding="utf-8")
+    return str(p.relative_to(workspace))
+
+
 SKILL_LINKS = {
     "wikiforge-ingest": "../../.forge/skills/ingest",
     "wikiforge-query": "../../.forge/skills/query",
@@ -243,6 +281,7 @@ def main():
     directories_created = create_directories(workspace)
     seed_files_created = create_seed_files(workspace, subs["{{today}}"], subs["{{domain}}"])
     symlinks_created = create_symlinks(workspace)
+    credentials_file = create_credentials_file(workspace)
 
     result = {
         "domain": subs["{{domain}}"],
@@ -251,6 +290,7 @@ def main():
         "directories_created": directories_created,
         "seed_files_created": seed_files_created,
         "symlinks_created": symlinks_created,
+        "credentials_file": credentials_file,
     }
     json.dump(result, sys.stdout, indent=2)
     print()
