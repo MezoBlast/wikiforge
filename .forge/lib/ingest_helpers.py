@@ -15,6 +15,12 @@ from pathlib import Path
 QUEUE_STATES = {" ", "~", "x", "!"}  # pending, in-progress, done, blocked
 QUEUE_ENTRY_RE = re.compile(r"^- \[(?P<state>.)\]\s+(?P<path>\S+)(?:\s*\|\s*(?P<note>.*))?$")
 
+QUEUE_HEADER = (
+    "# .forge/queue.md — append-only ingest queue\n"
+    "<!-- See schema.md or .forge/skills/ingest/SKILL.md for entry format. -->\n"
+    "<!-- States: [ ] pending  [~] in progress  [x] done  [!] blocked. -->\n"
+)
+
 
 def content_hash(path, length=16):
     """Return 'sha256:<first-length-hex-chars>' for the file at path."""
@@ -89,8 +95,15 @@ def enumerate_repo_files(repo_root, max_files=200):
 
 
 def parse_queue(queue_path):
-    """Yield (line_number, state, source_path, note) for each entry in queue.md."""
-    text = Path(queue_path).read_text(encoding="utf-8")
+    """Yield (line_number, state, source_path, note) for each entry in queue.md.
+
+    A missing queue file yields nothing (an un-bootstrapped or fresh workspace
+    has no queue yet).
+    """
+    p = Path(queue_path)
+    if not p.is_file():
+        return
+    text = p.read_text(encoding="utf-8")
     for i, line in enumerate(text.splitlines(), start=1):
         m = QUEUE_ENTRY_RE.match(line.rstrip())
         if m:
@@ -98,8 +111,14 @@ def parse_queue(queue_path):
 
 
 def append_queue_entry(queue_path, source_path, note=""):
-    """Append a `[ ] <path> | <note>` line if not already present."""
+    """Append a `[ ] <path> | <note>` line if not already present.
+
+    Creates the queue file (with its standard header) if it does not exist.
+    """
     p = Path(queue_path)
+    if not p.is_file():
+        p.parent.mkdir(parents=True, exist_ok=True)
+        p.write_text(QUEUE_HEADER, encoding="utf-8")
     text = p.read_text(encoding="utf-8")
     for _, _, existing, _ in parse_queue(p):
         if existing == source_path:
@@ -118,6 +137,8 @@ def set_queue_state(queue_path, source_path, new_state, note=None):
     if new_state not in QUEUE_STATES:
         raise ValueError(f"invalid state {new_state!r}; must be one of {sorted(QUEUE_STATES)}")
     p = Path(queue_path)
+    if not p.is_file():
+        raise FileNotFoundError(f"queue file does not exist: {queue_path}")
     text = p.read_text(encoding="utf-8")
     out = []
     found = False
