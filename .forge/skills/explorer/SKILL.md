@@ -23,16 +23,23 @@ Anything that falls under a listed exclusion is dead to you for this run, even i
 
 Four signal sources, in priority order:
 
-**a) Lint errors and warnings.** Run:
+**a) Lint errors and warnings.** Refresh and read the lint report:
 
 ```sh
-python3 .forge/lib/lint.py --report 2>/dev/null | grep -E '\[(warning|error)'
+python3 .forge/lib/lint.py --report >/dev/null
+cat .forge/lint-report.md
 ```
 
-Look for:
+Harvest the **mechanical** signals from the report's `## Errors` and
+`## Warnings` sections:
 - `code-pattern-missing-provenance` / `excerpt-missing` — the cited repo isn't in `raw/repos/`. **High priority** — these are concrete, named gaps.
-- `low-confidence` — pages whose `confidence:` is `low` or `placeholder`. Needs a second source.
+- `low-confidence` — pages whose `confidence:` is `low` or `placeholder`. Each needs a stronger or second source.
+- `stale` — pages overdue for re-verification against their source.
 - `orphan` clusters — may need supporting sources (often LOW priority; an orphan is sometimes just stylistic).
+
+Do **not** harvest the report's `## Open knowledge gaps` section here — those
+`query-gap` entries are picked up directly from `.forge/feedback.md` in
+signal (d) below. Reading them from both places would double-count.
 
 **b) Consumer feedback.** Read `dist/<latest>/feedback.md` if a built bundle exists. Each entry is a gap a downstream agent actually hit. **Always eligible** regardless of citation count.
 
@@ -61,6 +68,7 @@ For every candidate from step 1, compute a priority score and write it as a chec
 | Citation-chain target with co-citation score = 2                         | 30    |
 | Citation-chain target with co-citation score = 1                         | 10 — usually defer |
 | Adds a second source for a `low-confidence` page                         | 25    |
+| Re-verifies a `stale` page against its source                            | 20    |
 | Closes an `orphan` warning by adding a supporting source                 | 15    |
 
 **Per-run budget (defaults):**
