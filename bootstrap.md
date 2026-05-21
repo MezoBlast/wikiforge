@@ -236,11 +236,17 @@ echo "## [$(date -u +%Y-%m-%dT%H:%M:%SZ)] step-8 complete (credentials: <key-nam
 
 ### Step 9 — Verify the empty workspace
 
+First build the derived index, then run the strict check:
+
 ```sh
+python3 .forge/lib/lint.py --fix
 python3 .forge/lib/lint.py --strict
 ```
 
-Expected output: `0 error(s), 0 warning(s)` on the seeded pages (manifest, index, out_of_scope; `log.md` and other meta files do not count toward the page total).
+`--fix` builds `wiki/index.md` and the `wiki/.meta/` index. Without it the
+strict run reports a `stale-index` warning on the freshly seeded workspace.
+
+Expected output of `--strict`: `0 error(s), 0 warning(s)` on the seeded pages (manifest, index, out_of_scope; `log.md` and other meta files do not count toward the page total).
 
 If lint fails: stop. Either the templates have a bug, the substitution produced invalid frontmatter, or the linter has a regression. Report which page failed which check. Do not proceed to Step 10 — a failed lint here means the workspace cannot be trusted as a clean foundation.
 
