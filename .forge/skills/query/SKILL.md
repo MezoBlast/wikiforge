@@ -46,14 +46,23 @@ stop — that is a correct answer, not a gap.
 
 ### 2. Search
 
+Turn the question into search terms — do not pass the raw question.
+`bin/wiki-search` matches **each term independently** (case-insensitive) and
+ranks pages by how many distinct terms hit, weighting title, tag, and slug
+matches above body matches. You do not need the wiki's exact phrasing: pull
+3–6 salient keywords out of the question and pass those.
+
 ```sh
-bin/wiki-search <terms>
-bin/wiki-search --type claim <terms>     # narrow to one page type
+bin/wiki-search <keyword keyword keyword>
+bin/wiki-search --type claim <keywords>     # narrow to one page type
 ```
 
 `--type` accepts any of the six page types: `concept`, `convention`,
-`code-pattern`, `claim`, `source`, `entity`. Results rank title > tag > body
-matches; `--n N` caps the count (default 10).
+`code-pattern`, `claim`, `source`, `entity`. Each result is a `[score N]
+<slug>` line followed by a snippet; a higher score means more terms matched.
+`--n N` caps the count (default 10). If the top results look off, try a
+different keyword set — broader or more specific — rather than reaching for the
+question's exact wording.
 
 To browse rather than search:
 
@@ -144,8 +153,8 @@ feedback.
 ```sh
 bin/wiki-manifest                        # in scope: optimization is a top topic
 bin/wiki-search sparse gradient
-#   [1] concepts/optimization/adagrad (title)
-#   [3] concepts/optimization/sgd (body)
+#   [score 123] concepts/optimization/adagrad
+#   [score 11]  concepts/optimization/sgd
 bin/wiki-read concepts/optimization/adagrad
 #   confidence: verified; Backlinks shows [[claims/adagrad-sparse-strong]] (extends)
 bin/wiki-read claims/adagrad-sparse-strong
