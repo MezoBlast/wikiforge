@@ -64,10 +64,38 @@ def test_stale_index_silent_when_meta_fresh(tmp_path):
     pages_tsv = meta / "pages.tsv"
     pages_tsv.write_text("path\ttitle\ttype\ttags\tlast_verified\tconfidence\n",
                          encoding="utf-8")
+    index_md = wiki / "index.md"
+    index_md.write_text("# Index\n", encoding="utf-8")
     future = time.time() + 10
-    os.utime(pages_tsv, (future, future))  # index newer than the page
+    os.utime(pages_tsv, (future, future))
+    os.utime(index_md, (future, future))  # index newer than the page
     issues = lint.lint(wiki, tmp_path / "raw", 180, 30, datetime.date(2026, 5, 20))
     assert not any(i.code == "stale-index" for i in issues)
+
+
+def test_stale_index_warns_when_index_md_stale(tmp_path):
+    import os
+    import time
+    wiki = tmp_path / "wiki"
+    (wiki / "concepts").mkdir(parents=True)
+    (wiki / "concepts" / "sgd.md").write_text(
+        _page("title: SGD\ntype: concept\ncreated: 2026-01-01\n"
+              "last_verified: 2026-01-01\nconfidence: likely"),
+        encoding="utf-8")
+    meta = wiki / ".meta"
+    meta.mkdir()
+    pages_tsv = meta / "pages.tsv"
+    pages_tsv.write_text("path\ttitle\ttype\ttags\tlast_verified\tconfidence\n",
+                         encoding="utf-8")
+    index_md = wiki / "index.md"
+    index_md.write_text("# Index\n", encoding="utf-8")
+    future = time.time() + 100
+    os.utime(pages_tsv, (future, future))   # .meta fresh
+    past = time.time() - 100
+    os.utime(index_md, (past, past))        # index.md stale
+    issues = lint.lint(wiki, tmp_path / "raw", 180, 30, datetime.date(2026, 5, 20))
+    stale = [i for i in issues if i.code == "stale-index"]
+    assert any("index.md" in i.page for i in stale)
 
 
 def test_fix_regenerates_meta_index(tmp_path):

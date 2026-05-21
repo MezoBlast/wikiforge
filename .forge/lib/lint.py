@@ -166,20 +166,28 @@ def check_code_pattern_excerpt(slug, fm, raw_dir, issues):
 
 
 def check_stale_index(wiki_dir, issues):
-    """Warn if wiki/.meta/pages.tsv is missing or older than the newest page."""
-    meta = wiki_dir / ".meta" / "pages.tsv"
+    """Warn if wiki/.meta/pages.tsv or wiki/index.md is missing or older than
+    the newest wiki page."""
     newest = 0.0
     for md in wiki_dir.rglob("*.md"):
         if ".meta" in md.parts:
             continue
         newest = max(newest, md.stat().st_mtime)
+    remedy = "run python3 .forge/lib/lint.py --fix"
+    meta = wiki_dir / ".meta" / "pages.tsv"
     if not meta.exists():
         issues.append(Issue(WARNING, "stale-index", ".meta/pages.tsv",
-            "wiki/.meta/ index missing — run python3 .forge/lib/lint.py --fix"))
-        return
-    if meta.stat().st_mtime < newest:
+            f"wiki/.meta/ index missing — {remedy}"))
+    elif meta.stat().st_mtime < newest:
         issues.append(Issue(WARNING, "stale-index", ".meta/pages.tsv",
-            "index older than newest wiki page — run python3 .forge/lib/lint.py --fix"))
+            f"index older than newest wiki page — {remedy}"))
+    index_md = wiki_dir / "index.md"
+    if not index_md.exists():
+        issues.append(Issue(WARNING, "stale-index", "index.md",
+            f"wiki/index.md missing — {remedy}"))
+    elif index_md.stat().st_mtime < newest:
+        issues.append(Issue(WARNING, "stale-index", "index.md",
+            f"index.md older than newest wiki page — {remedy}"))
 
 
 def lint(wiki_dir, raw_dir, stale_days, rot_days, today):
