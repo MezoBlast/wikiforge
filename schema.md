@@ -281,11 +281,12 @@ Declaring a disallowed edge type is a **disallowed-edge-type** lint error.
 
 ## Index artifacts
 
-Two TSV files in `wiki/.meta/` index the wiki. They are produced by
-`.forge/lib/index.py` — invoked on demand in the curator workspace (by `ingest`
-after a run and by `lint --fix`) and by `build.py` when assembling a bundle. The
-curator-side index covers every page; the bundle-side index covers only the
-pages that ship.
+`.forge/lib/index.py` produces the wiki's derived index: two TSV files in
+`wiki/.meta/` (consumed by the `bin/wiki-*` read scripts) and `wiki/index.md`
+(the human/agent catalog page). It is invoked on demand in the curator
+workspace (by `ingest` after a run and by `lint --fix`) and by `build.py` when
+assembling a bundle. The curator-side index covers every page; the bundle-side
+index covers only the pages that ship.
 
 ### `pages.tsv`
 

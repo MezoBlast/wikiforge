@@ -141,9 +141,10 @@ Conditional drafts (only when warranted by the source):
 - Append to `wiki/log.md`: `## [YYYY-MM-DD] ingest | <source-slug>` plus a one-line note.
 - Regenerate the wiki index. Running `python3 .forge/lib/lint.py --fix` is the
   recommended close-out: it rebuilds both `wiki/index.md` and the `wiki/.meta/`
-  index that `query` reads. (If you only need the `.meta/` index refreshed and
-  not `index.md`, `python3 .forge/lib/index.py` does just that.) This is not
-  optional — pages you ingested are not searchable until the index is rebuilt.
+  index that `query` reads. (`python3 .forge/lib/index.py` does the same index
+  rebuild — both `index.md` and `wiki/.meta/` — without running the lint
+  checks.) This is not optional — pages you ingested are not searchable until
+  the index is rebuilt.
 
 ### 8. Update the queue
 
@@ -211,6 +212,9 @@ After each ingest run, execute:
 ```sh
 python3 .forge/lib/lint.py --report
 ```
+
+That run also refreshes `.forge/lint-report.md` — the health snapshot the next
+`explorer` pass reads.
 
 Address every error you introduced. Warnings can wait — but errors block the next build. If the linter reports `excerpt-missing` on a `code-patterns/` page you just wrote, the cited file path doesn't resolve in `raw/repos/`. Fix the provenance.
 
