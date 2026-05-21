@@ -21,14 +21,16 @@ import lint as LINT
 import index
 
 
-# meta files that ship in the bundle (log.md is curator-side only)
-SHIPPED_META = {"manifest", "index", "out_of_scope"}
+# meta files copied verbatim into the bundle (log.md is curator-side only).
+# index.md is NOT here — it is rendered fresh by index.write_index_md so it
+# reflects the shipped page set.
+SHIPPED_META = {"manifest", "out_of_scope"}
 
 
 def run_lint(wiki_dir, raw_dir):
     today = datetime.date.today()
     issues = LINT.lint(wiki_dir, raw_dir, S.STALE_DAYS, S.PLACEHOLDER_ROT_DAYS, today)
-    errs = [i for i in issues if i.severity == LINT.ERROR]
+    errs = [i for i in issues if i.is_blocking()]
     if errs:
         for i in errs:
             print(i.fmt(), file=sys.stderr)
@@ -133,6 +135,7 @@ def build(workspace, version, drop_placeholder, do_tar):
         out_path.write_text(FM.dump(fm, body), encoding="utf-8")
 
     print("==> indexing")
+    index.write_index_md(out_wiki, kept, datetime.date.today())
     index.write_pages_tsv(out_meta, kept)
     index.write_links_tsv(out_meta, kept, kept_slugs)
 

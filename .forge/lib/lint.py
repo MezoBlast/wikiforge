@@ -24,16 +24,22 @@ WARNING = "warning"
 
 
 class Issue:
-    __slots__ = ("severity", "code", "page", "message")
+    __slots__ = ("severity", "code", "page", "message", "draft")
 
-    def __init__(self, severity, code, page, message):
+    def __init__(self, severity, code, page, message, draft=False):
         self.severity = severity
         self.code = code
         self.page = page
         self.message = message
+        self.draft = draft
+
+    def is_blocking(self):
+        """An error on a non-draft page. Only blocking issues fail --strict."""
+        return self.severity == ERROR and not self.draft
 
     def fmt(self):
-        return f"[{self.severity:<7}] {self.code:<32} {self.page}: {self.message}"
+        tag = " (draft)" if self.draft else ""
+        return f"[{self.severity:<7}] {self.code:<32} {self.page}: {self.message}{tag}"
 
 
 def parse_date(s):
@@ -45,6 +51,49 @@ def parse_date(s):
         return datetime.datetime.strptime(s, S.DATE_FMT).date()
     except ValueError:
         return None
+
+
+def _gap_date(ts):
+    """Parse an ISO-8601 timestamp from a query-gap header; None if unparseable."""
+    if not ts:
+        return None
+    try:
+        return datetime.datetime.fromisoformat(ts.replace("Z", "+00:00")).date()
+    except ValueError:
+        return None
+
+
+def collect_gaps(feedback_path, gap_days, today):
+    """Parse query-gap entries from .forge/feedback.md within `gap_days` of
+    `today`. Returns dicts {ts, severity, lines}, newest first. An entry with an
+    unparseable timestamp is kept (surfaced rather than silently dropped)."""
+    if not feedback_path.exists():
+        return []
+    cutoff = today - datetime.timedelta(days=gap_days)
+    gaps = []
+    cur = None
+    for line in feedback_path.read_text(encoding="utf-8").splitlines():
+        if line.startswith("## ") and "query-gap" in line:
+            ts = ""
+            lb, rb = line.find("["), line.find("]")
+            if 0 <= lb < rb:
+                ts = line[lb + 1:rb]
+            sev = "unknown"
+            if "severity:" in line:
+                sev = line.split("severity:", 1)[1].strip()
+            cur = {"ts": ts, "severity": sev, "lines": []}
+            gaps.append(cur)
+        elif line.startswith("## "):
+            cur = None
+        elif cur is not None and line.strip():
+            cur["lines"].append(line.rstrip())
+    kept = []
+    for g in gaps:
+        d = _gap_date(g["ts"])
+        if d is None or d >= cutoff:
+            kept.append(g)
+    kept.sort(key=lambda g: g["ts"], reverse=True)
+    return kept
 
 
 def detect_type_from_slug(slug):
@@ -160,20 +209,28 @@ def check_code_pattern_excerpt(slug, fm, raw_dir, issues):
 
 
 def check_stale_index(wiki_dir, issues):
-    """Warn if wiki/.meta/pages.tsv is missing or older than the newest page."""
-    meta = wiki_dir / ".meta" / "pages.tsv"
+    """Warn if wiki/.meta/pages.tsv or wiki/index.md is missing or older than
+    the newest wiki page."""
     newest = 0.0
     for md in wiki_dir.rglob("*.md"):
         if ".meta" in md.parts:
             continue
         newest = max(newest, md.stat().st_mtime)
+    remedy = "run python3 .forge/lib/lint.py --fix"
+    meta = wiki_dir / ".meta" / "pages.tsv"
     if not meta.exists():
         issues.append(Issue(WARNING, "stale-index", ".meta/pages.tsv",
-            "wiki/.meta/ index missing — run python3 .forge/lib/lint.py --fix"))
-        return
-    if meta.stat().st_mtime < newest:
+            f"wiki/.meta/ index missing — {remedy}"))
+    elif meta.stat().st_mtime < newest:
         issues.append(Issue(WARNING, "stale-index", ".meta/pages.tsv",
-            "index older than newest wiki page — run python3 .forge/lib/lint.py --fix"))
+            f"index older than newest wiki page — {remedy}"))
+    index_md = wiki_dir / "index.md"
+    if not index_md.exists():
+        issues.append(Issue(WARNING, "stale-index", "index.md",
+            f"wiki/index.md missing — {remedy}"))
+    elif index_md.stat().st_mtime < newest:
+        issues.append(Issue(WARNING, "stale-index", "index.md",
+            f"index.md older than newest wiki page — {remedy}"))
 
 
 def lint(wiki_dir, raw_dir, stale_days, rot_days, today):
@@ -194,6 +251,7 @@ def lint(wiki_dir, raw_dir, stale_days, rot_days, today):
                     f"basename {bn!r} duplicates: {others}"))
 
     incoming = {s: 0 for s in valid_slugs}
+    draft_slugs = set()
 
     def record_link(from_slug, target, edge):
         """Resolve link; record incoming or emit broken-wikilink."""
@@ -230,6 +288,8 @@ def lint(wiki_dir, raw_dir, stale_days, rot_days, today):
             continue
 
         check_frontmatter(slug, page_type, fm, issues)
+        if fm.get("draft") is True:
+            draft_slugs.add(slug)
         if page_type == "code-pattern":
             check_code_pattern_excerpt(slug, fm, raw_dir, issues)
 
@@ -253,6 +313,11 @@ def lint(wiki_dir, raw_dir, stale_days, rot_days, today):
             if cdate and (today - cdate).days > rot_days:
                 issues.append(Issue(WARNING, "placeholder-rotting", slug,
                     f"placeholder for {(today - cdate).days} days (>{rot_days})"))
+
+        # low-confidence
+        if fm.get("confidence") in ("low", "placeholder"):
+            issues.append(Issue(WARNING, "low-confidence", slug,
+                f"confidence is {fm.get('confidence')!r}"))
 
         # prose wikilinks
         if isinstance(body, str):
@@ -305,51 +370,73 @@ def lint(wiki_dir, raw_dir, stale_days, rot_days, today):
             issues.append(Issue(WARNING, "claim-supports-without-evidence", slug,
                 "claim extends another but has empty 'evidence' list"))
 
+    for i in issues:
+        if i.page in draft_slugs:
+            i.draft = True
+
     return issues
 
 
 def fix(wiki_dir, today):
-    """Conservative auto-fix: rebuild index.md and wiki/.meta/ from current pages."""
-    pages = discover_pages(wiki_dir)
-    by_type = {}
-    for slug, _, fm, _ in pages:
-        if slug in S.META_FILES or not isinstance(fm, dict):
-            continue
-        t = fm.get("type")
-        if t not in S.PAGE_TYPES:
-            continue
-        by_type.setdefault(t, []).append((slug, fm.get("title", slug)))
-
-    lines = [
-        "---",
-        "title: index",
-        "type: index",
-        f"created: {today.isoformat()}",
-        f"last_verified: {today.isoformat()}",
-        "---",
-        "",
-        "# Index",
-        "",
-        "Catalog of all pages, grouped by type. Rebuilt by `lint --fix`.",
-        "",
-    ]
-    for pt in S.PAGE_TYPES:
-        plural = S.TYPE_DIRS[pt]
-        lines.append(f"## {plural}")
-        lines.append("")
-        entries = sorted(by_type.get(pt, []))
-        if not entries:
-            lines.append("_(none)_")
-        else:
-            for slug, title in entries:
-                lines.append(f"- [[{slug}]] — {title}")
-        lines.append("")
-
-    (wiki_dir / "index.md").write_text("\n".join(lines).rstrip() + "\n", encoding="utf-8")
+    """Conservative auto-fix: rebuild index.md and wiki/.meta/ from current
+    pages, via index.py. Never deletes or mutates pages."""
+    pages = list(index.load_pages(wiki_dir))
+    index.write_index_md(wiki_dir, pages, today)
     print(f"rebuilt {wiki_dir / 'index.md'}")
-    meta_dir = wiki_dir / ".meta"
-    index.write_meta(meta_dir, index.load_pages(wiki_dir))
-    print(f"rebuilt {meta_dir}")
+    index.write_meta(wiki_dir / ".meta", pages)
+    print(f"rebuilt {wiki_dir / '.meta'}")
+
+
+def write_report(report_path, issues, gaps, today):
+    """Render the agent-facing health snapshot to report_path. Overwrites."""
+    errors = [i for i in issues if i.severity == ERROR and not i.draft]
+    warnings = [i for i in issues if i.severity == WARNING and not i.draft]
+    draft_issues = [i for i in issues if i.draft]
+    stamp = datetime.datetime.now(datetime.timezone.utc).strftime(
+        "%Y-%m-%dT%H:%M:%SZ")
+    out = ["# Lint report", "",
+           f"Generated {stamp} · {len(errors)} error(s), {len(warnings)} warning(s)",
+           "", "## Errors", ""]
+    if errors:
+        for i in sorted(errors, key=lambda i: (i.code, i.page)):
+            out.append(f"[{i.code}] {i.page}: {i.message}")
+    else:
+        out.append("_(none)_")
+    out += ["", "## Warnings", ""]
+    by_code = {}
+    for i in warnings:
+        by_code.setdefault(i.code, []).append(i)
+    if by_code:
+        for code in sorted(by_code):
+            items = by_code[code]
+            out.append(f"### {code} ({len(items)})")
+            for i in sorted(items, key=lambda i: i.page):
+                out.append(f"- [[{i.page}]] — {i.message}")
+            out.append("")
+    else:
+        out += ["_(none)_", ""]
+    out += ["## Draft pages", "",
+            "Pages with `draft: true` — excluded from the build and from "
+            "`--strict`. Their issues are advisory; resolve before un-drafting.",
+            ""]
+    draft_by_page = {}
+    for i in draft_issues:
+        draft_by_page.setdefault(i.page, []).append(i.code)
+    if draft_by_page:
+        for page in sorted(draft_by_page):
+            codes = ", ".join(sorted(set(draft_by_page[page])))
+            out.append(f"- [[{page}]] — {len(draft_by_page[page])} issue(s): {codes}")
+    else:
+        out.append("_(none)_")
+    out += ["", "## Open knowledge gaps", "",
+            "`query-gap` entries from `.forge/feedback.md`, newest first.", ""]
+    if gaps:
+        for g in gaps:
+            summary = g["lines"][0] if g["lines"] else ""
+            out.append(f"- [{g['ts']}] severity: {g['severity']} — {summary}")
+    else:
+        out.append("_(none)_")
+    report_path.write_text("\n".join(out).rstrip() + "\n", encoding="utf-8")
 
 
 def main():
@@ -365,6 +452,8 @@ def main():
     p.add_argument("--raw", default="raw", help="path to raw dir (default: raw)")
     p.add_argument("--stale-days", type=int, default=S.STALE_DAYS)
     p.add_argument("--rot-days", type=int, default=S.PLACEHOLDER_ROT_DAYS)
+    p.add_argument("--gap-days", type=int, default=90,
+                   help="knowledge-gap window for the report (default: 90)")
     args = p.parse_args()
 
     wiki_dir = Path(args.wiki).resolve()
@@ -384,9 +473,15 @@ def main():
     for i in issues:
         print(i.fmt())
     sys.stdout.flush()
-    n_err = sum(1 for i in issues if i.severity == ERROR)
-    n_warn = len(issues) - n_err
+    n_err = sum(1 for i in issues if i.is_blocking())
+    n_warn = sum(1 for i in issues if i.severity == WARNING)
     print(f"\n{n_err} error(s), {n_warn} warning(s)", file=sys.stderr)
+
+    # agent-facing report — written for report/strict runs, not --fix
+    forge_dir = wiki_dir.parent / ".forge"
+    if forge_dir.is_dir():
+        gaps = collect_gaps(forge_dir / "feedback.md", args.gap_days, today)
+        write_report(forge_dir / "lint-report.md", issues, gaps, today)
 
     if args.strict and n_err > 0:
         sys.exit(1)

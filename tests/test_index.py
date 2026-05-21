@@ -77,3 +77,40 @@ def test_pages_tsv_absent_last_verified_is_empty(tmp_path):
     pages_tsv = (meta / "pages.tsv").read_text(encoding="utf-8")
     assert "\tNone\t" not in pages_tsv
     assert "concepts/stub\tStub\tconcept\t\t\tplaceholder" in pages_tsv
+
+
+def test_write_index_md_groups_by_type(tmp_path):
+    import datetime
+    wiki = tmp_path / "wiki"
+    (wiki / "concepts").mkdir(parents=True)
+    (wiki / "concepts" / "sgd.md").write_text(
+        "---\ntitle: SGD\ntype: concept\ncreated: 2026-01-01\n"
+        "last_verified: 2026-01-01\nconfidence: likely\n---\n\nbody\n",
+        encoding="utf-8")
+    pages = list(index.load_pages(wiki))
+    index.write_index_md(wiki, pages, datetime.date(2026, 5, 21))
+    txt = (wiki / "index.md").read_text(encoding="utf-8")
+    assert "# Index" in txt
+    assert "## concepts" in txt
+    assert "[[concepts/sgd]] — SGD" in txt
+
+
+def test_write_index_md_empty_type_renders_none(tmp_path):
+    import datetime
+    wiki = tmp_path / "wiki"
+    wiki.mkdir()
+    index.write_index_md(wiki, [], datetime.date(2026, 5, 21))
+    assert "_(none)_" in (wiki / "index.md").read_text(encoding="utf-8")
+
+
+def test_index_main_writes_index_md(tmp_path, monkeypatch):
+    wiki = tmp_path / "wiki"
+    (wiki / "concepts").mkdir(parents=True)
+    (wiki / "concepts" / "sgd.md").write_text(
+        "---\ntitle: SGD\ntype: concept\ncreated: 2026-01-01\n"
+        "last_verified: 2026-01-01\nconfidence: likely\n---\n\nbody\n",
+        encoding="utf-8")
+    monkeypatch.setattr("sys.argv", ["index", "--wiki", str(wiki)])
+    index.main()
+    assert (wiki / "index.md").exists()
+    assert (wiki / ".meta" / "pages.tsv").exists()
