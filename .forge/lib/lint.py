@@ -24,16 +24,22 @@ WARNING = "warning"
 
 
 class Issue:
-    __slots__ = ("severity", "code", "page", "message")
+    __slots__ = ("severity", "code", "page", "message", "draft")
 
-    def __init__(self, severity, code, page, message):
+    def __init__(self, severity, code, page, message, draft=False):
         self.severity = severity
         self.code = code
         self.page = page
         self.message = message
+        self.draft = draft
+
+    def is_blocking(self):
+        """An error on a non-draft page. Only blocking issues fail --strict."""
+        return self.severity == ERROR and not self.draft
 
     def fmt(self):
-        return f"[{self.severity:<7}] {self.code:<32} {self.page}: {self.message}"
+        tag = " (draft)" if self.draft else ""
+        return f"[{self.severity:<7}] {self.code:<32} {self.page}: {self.message}{tag}"
 
 
 def parse_date(s):
@@ -194,6 +200,7 @@ def lint(wiki_dir, raw_dir, stale_days, rot_days, today):
                     f"basename {bn!r} duplicates: {others}"))
 
     incoming = {s: 0 for s in valid_slugs}
+    draft_slugs = set()
 
     def record_link(from_slug, target, edge):
         """Resolve link; record incoming or emit broken-wikilink."""
@@ -230,6 +237,8 @@ def lint(wiki_dir, raw_dir, stale_days, rot_days, today):
             continue
 
         check_frontmatter(slug, page_type, fm, issues)
+        if fm.get("draft") is True:
+            draft_slugs.add(slug)
         if page_type == "code-pattern":
             check_code_pattern_excerpt(slug, fm, raw_dir, issues)
 
@@ -304,6 +313,10 @@ def lint(wiki_dir, raw_dir, stale_days, rot_days, today):
         if pt == "claim" and (fm.get("extends") or []) and not (fm.get("evidence") or []):
             issues.append(Issue(WARNING, "claim-supports-without-evidence", slug,
                 "claim extends another but has empty 'evidence' list"))
+
+    for i in issues:
+        if i.page in draft_slugs:
+            i.draft = True
 
     return issues
 

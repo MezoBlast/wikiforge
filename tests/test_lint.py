@@ -83,3 +83,31 @@ def test_fix_regenerates_meta_index(tmp_path):
     assert (meta / "pages.tsv").exists()
     assert (meta / "links.tsv").exists()
     assert "concepts/sgd" in (meta / "pages.tsv").read_text(encoding="utf-8")
+
+
+def test_draft_page_error_is_non_blocking(tmp_path):
+    wiki = tmp_path / "wiki"
+    (wiki / "concepts").mkdir(parents=True)
+    (wiki / "concepts" / "wip.md").write_text(
+        "---\ntitle: WIP\ntype: concept\ncreated: 2026-01-01\n"
+        "last_verified: 2026-01-01\nconfidence: likely\ndraft: true\n---\n\n"
+        "A broken [[concepts/nonexistent]] link.\n",
+        encoding="utf-8")
+    issues = lint.lint(wiki, tmp_path / "raw", 180, 30, datetime.date(2026, 5, 20))
+    broken = [i for i in issues if i.code == "broken-wikilink"]
+    assert broken, "the broken wikilink should still be reported"
+    assert broken[0].draft is True
+    assert broken[0].is_blocking() is False
+    assert not any(i.is_blocking() for i in issues)
+
+
+def test_non_draft_page_error_is_blocking(tmp_path):
+    wiki = tmp_path / "wiki"
+    (wiki / "concepts").mkdir(parents=True)
+    (wiki / "concepts" / "live.md").write_text(
+        "---\ntitle: Live\ntype: concept\ncreated: 2026-01-01\n"
+        "last_verified: 2026-01-01\nconfidence: likely\n---\n\n"
+        "A broken [[concepts/nonexistent]] link.\n",
+        encoding="utf-8")
+    issues = lint.lint(wiki, tmp_path / "raw", 180, 30, datetime.date(2026, 5, 20))
+    assert any(i.is_blocking() for i in issues)
