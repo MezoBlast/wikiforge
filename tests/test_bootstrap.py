@@ -1,3 +1,6 @@
+import re
+from datetime import datetime, timezone
+
 import bootstrap
 
 
@@ -34,10 +37,6 @@ def test_seed_feedback_idempotent(tmp_path):
     bootstrap.create_seed_files(tmp_path, "2026-05-20", "test-domain")
     again = bootstrap.create_seed_files(tmp_path, "2026-05-20", "test-domain")
     assert ".forge/feedback.md" not in again  # already exists, not re-created
-
-
-import re
-from datetime import datetime, timezone
 
 
 def test_forge_log_seed_has_real_timestamp(tmp_path):

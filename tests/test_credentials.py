@@ -1,4 +1,5 @@
 import os
+from pathlib import Path
 
 import credentials
 
@@ -38,9 +39,6 @@ def test_load_credentials_real_env_wins(tmp_path, monkeypatch):
     monkeypatch.setenv("WF_TEST_TOKEN", "fromenv")
     credentials.load_credentials(f, into_environ=True)
     assert os.environ["WF_TEST_TOKEN"] == "fromenv"
-
-
-from pathlib import Path
 
 
 def test_default_path_is_absolute():
