@@ -1,3 +1,6 @@
+import re
+from datetime import datetime, timezone
+
 import bootstrap
 
 
@@ -34,3 +37,13 @@ def test_seed_feedback_idempotent(tmp_path):
     bootstrap.create_seed_files(tmp_path, "2026-05-20", "test-domain")
     again = bootstrap.create_seed_files(tmp_path, "2026-05-20", "test-domain")
     assert ".forge/feedback.md" not in again  # already exists, not re-created
+
+
+def test_forge_log_seed_has_real_timestamp(tmp_path):
+    before = datetime.now(timezone.utc)
+    bootstrap.create_seed_files(tmp_path, "2026-05-20", "test-domain")
+    content = (tmp_path / ".forge/log.md").read_text()
+    m = re.search(r"## \[(\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z)\] bootstrap", content)
+    assert m, content
+    ts = datetime.strptime(m.group(1), "%Y-%m-%dT%H:%M:%SZ").replace(tzinfo=timezone.utc)
+    assert abs((ts - before).total_seconds()) < 120  # a real wall-clock time

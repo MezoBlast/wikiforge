@@ -1,5 +1,5 @@
 #!/bin/sh
-# wiki-search — title > tag > body match; print top N with snippets
+# wiki-search — OR-match query terms; rank by matched-term count + title/phrase bonus
 set -eu
 type=""; n=10
 while [ $# -gt 0 ]; do
@@ -18,25 +18,63 @@ WIKI_ROOT="${WIKI_ROOT:-$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)}"
 wiki="$WIKI_ROOT/wiki"
 meta="$wiki/.meta/pages.tsv"
 [ -f "$meta" ] || { echo "wiki-search: no $meta — run the build" >&2; exit 1; }
-qlc=$(printf '%s' "$q" | tr '[:upper:]' '[:lower:]')
-root=$wiki; [ -n "$type" ] && root="$wiki/$type"
+tab=$(printf '\t')
 
-# rank: 1=title, 2=tag, 3=body. Format: rank<TAB>path<TAB>source<TAB>snippet
-{
-    awk -F'\t' -v q="$qlc" -v ty="$type" '
-        NR == 1 && $1 == "path" { next }
-        ty != "" && $3 != ty { next }
-        index(tolower($2), q) { print "1\t" $1 "\ttitle\t" $2 }
-        index(tolower($4), q) { print "2\t" $1 "\ttag\t" $4 }
-    ' "$meta"
-    [ -d "$root" ] && find "$root" -type f -name '*.md' -not -path '*/.meta/*' 2>/dev/null \
-    | while IFS= read -r p; do
-        grep -q -i -- "$q" "$p" 2>/dev/null || continue
-        s=${p#"$wiki/"}; s=${s%.md}
-        sn=$(grep -i -m1 -- "$q" "$p" 2>/dev/null | head -n1 | cut -c1-160 | tr '\t' ' ')
-        printf '3\t%s\tbody\t%s\n' "$s" "$sn"
+qlc=$(printf '%s' "$q" | tr '[:upper:]' '[:lower:]')
+
+# stop-words dropped from the term list (surrounding spaces make matching exact)
+stop=" a an and are as at be by for from has in is it its of on or that the to with "
+
+# tokenize: lowercase words, strip punctuation, drop stop-words and tokens <=2 chars
+tokens=""
+for w in $qlc; do
+    w=$(printf '%s' "$w" | tr -cd 'a-z0-9-')
+    [ "${#w}" -gt 2 ] || continue
+    case "$stop" in *" $w "*) continue ;; esac
+    tokens="$tokens $w"
+done
+# degenerate query (all stop-words / short): fall back to the raw words
+if [ -z "${tokens# }" ]; then
+    for w in $qlc; do
+        w=$(printf '%s' "$w" | tr -cd 'a-z0-9-')
+        [ -n "$w" ] && tokens="$tokens $w"
     done
-} | sort -t '	' -k1,1n -k2,2 \
-  | awk -F'\t' '!seen[$2]++' \
-  | head -n "$n" \
-  | awk -F'\t' '{ printf "[%s] %s (%s)\n  %s\n", $1, $2, $3, $4 }'
+fi
+
+# score each indexed page: title/tag/slug/body term hits + whole-phrase bonus
+awk -F'\t' 'NR==1 && $1=="path" {next} {print}' "$meta" \
+| while IFS="$tab" read -r path title ptype tags rest; do
+    [ -n "$type" ] && [ "$ptype" != "$type" ] && continue
+    file="$wiki/$path.md"
+    tlc=$(printf '%s' "$title" | tr '[:upper:]' '[:lower:]')
+    glc=$(printf '%s' "$tags"  | tr '[:upper:]' '[:lower:]')
+    plc=$(printf '%s' "$path"  | tr '[:upper:]' '[:lower:]')
+    score=0; matched=0
+    case "$tlc" in *"$qlc"*) score=$((score + 100)) ;; esac
+    if [ -f "$file" ] && grep -F -i -q -- "$q" "$file" 2>/dev/null; then
+        score=$((score + 40))
+    fi
+    for tok in $tokens; do
+        hit=0
+        case "$tlc" in *"$tok"*) score=$((score + 10)); hit=1 ;; esac
+        case "$glc" in *"$tok"*) score=$((score + 5));  hit=1 ;; esac
+        case "$plc" in *"$tok"*) score=$((score + 8));  hit=1 ;; esac
+        if [ -f "$file" ] && grep -F -i -q -- "$tok" "$file" 2>/dev/null; then
+            score=$((score + 1)); hit=1
+        fi
+        [ "$hit" -eq 1 ] && matched=$((matched + 1))
+    done
+    [ "$matched" -gt 0 ] || continue
+    snip=""
+    if [ -f "$file" ]; then
+        for tok in $tokens; do
+            snip=$(grep -i -m1 -F -- "$tok" "$file" 2>/dev/null | cut -c1-160 | tr '\t' ' ')
+            [ -n "$snip" ] && break
+        done
+    fi
+    printf '%s\t%s\t%s\n' "$score" "$path" "$snip"
+done \
+| sort -t "$tab" -k1,1nr -k2,2 \
+| awk -F'\t' '!seen[$2]++' \
+| head -n "$n" \
+| awk -F'\t' '{ printf "[score %s] %s\n  %s\n", $1, $2, $3 }'

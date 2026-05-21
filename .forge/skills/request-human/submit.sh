@@ -56,6 +56,7 @@ if [ -n "$key" ]; then
 fi
 
 today=$(date -u +%Y-%m-%d)
+now=$(date -u +%Y-%m-%dT%H:%M:%SZ)
 seq=1
 while [ -e "$inbox/$today-$(printf '%03d' "$seq").md" ]; do
     seq=$((seq + 1))
@@ -97,8 +98,8 @@ body=$(cat)
 
 # log
 log="$WORKSPACE/.forge/log.md"
-[ -f "$log" ] && printf '\n## [%sT00:00:00Z] request-human | submitted %s (%s, %s)\n\n%s\n' \
-    "$today" "$id" "$urgency" "$type" "$title" >> "$log"
+[ -f "$log" ] && printf '\n## [%s] request-human | submitted %s (%s, %s)\n\n%s\n' \
+    "$now" "$id" "$urgency" "$type" "$title" >> "$log"
 
 # notify on blocking
 if [ "$urgency" = "blocking" ]; then

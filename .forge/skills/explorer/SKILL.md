@@ -43,7 +43,7 @@ signal (d) below. Reading them from both places would double-count.
 
 **b) Consumer feedback.** Read `dist/<latest>/feedback.md` if a built bundle exists. Each entry is a gap a downstream agent actually hit. **Always eligible** regardless of citation count.
 
-**c) Citation chains.** Walk every `wiki/sources/<slug>.md` and collect external references mentioned in the body (cited papers by name/DOI, linked repos, doc URLs). For each candidate target, count how many existing source pages mention it. This count is the **co-citation score**.
+**c) Citation chains.** Walk every `wiki/sources/<slug>.md` and collect external references mentioned in the body (cited papers by name/DOI, linked repos, doc URLs). For each candidate target, count how many existing source pages mention it. This count is the **co-citation score**. This pass is the **sole** channel for cited-but-missing sources — ingest deliberately does not pre-queue them, so explorer will not see duplicate candidates.
 
 **d) Curator query gaps.** Read `.forge/feedback.md` if it exists. The `query`
 skill appends a `query-gap` entry there whenever the wiki could not answer a
@@ -76,6 +76,13 @@ For every candidate from step 1, compute a priority score and write it as a chec
 - ≤ **10** total fetches
 - ≤ **3** repos (repos are large; cap them separately)
 - ≤ **200 MB** total download size (estimate before fetching; for arxiv, assume ~5 MB unless you know otherwise)
+
+**MinerU ceiling.** ingest normalizes PDFs and Office files through MinerU:
+200 MB / 200 pages per file with a `MINERU_API_TOKEN` configured in
+`.forge/secrets/credentials.env`, or 10 MB / 20 pages without one. A source
+fetched beyond that ceiling will block in the queue (`[!]`) and produce a
+request-human entry — so size the slate to what ingest can actually process,
+not just to the 200 MB per-run budget above.
 
 Sort candidates by score descending. Take the top-N that fits the budget. **Drop the rest** — they're not gone, they're deferred to the next run, where the priority landscape may have changed.
 
