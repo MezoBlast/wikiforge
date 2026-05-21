@@ -387,6 +387,58 @@ def fix(wiki_dir, today):
     print(f"rebuilt {wiki_dir / '.meta'}")
 
 
+def write_report(report_path, issues, gaps, today):
+    """Render the agent-facing health snapshot to report_path. Overwrites."""
+    errors = [i for i in issues if i.severity == ERROR and not i.draft]
+    warnings = [i for i in issues if i.severity == WARNING and not i.draft]
+    draft_issues = [i for i in issues if i.draft]
+    stamp = datetime.datetime.now(datetime.timezone.utc).strftime(
+        "%Y-%m-%dT%H:%M:%SZ")
+    out = ["# Lint report", "",
+           f"Generated {stamp} · {len(errors)} error(s), {len(warnings)} warning(s)",
+           "", "## Errors", ""]
+    if errors:
+        for i in sorted(errors, key=lambda i: (i.code, i.page)):
+            out.append(f"[{i.code}] {i.page}: {i.message}")
+    else:
+        out.append("_(none)_")
+    out += ["", "## Warnings", ""]
+    by_code = {}
+    for i in warnings:
+        by_code.setdefault(i.code, []).append(i)
+    if by_code:
+        for code in sorted(by_code):
+            items = by_code[code]
+            out.append(f"### {code} ({len(items)})")
+            for i in sorted(items, key=lambda i: i.page):
+                out.append(f"- [[{i.page}]] — {i.message}")
+            out.append("")
+    else:
+        out += ["_(none)_", ""]
+    out += ["## Draft pages", "",
+            "Pages with `draft: true` — excluded from the build and from "
+            "`--strict`. Their issues are advisory; resolve before un-drafting.",
+            ""]
+    draft_by_page = {}
+    for i in draft_issues:
+        draft_by_page.setdefault(i.page, []).append(i.code)
+    if draft_by_page:
+        for page in sorted(draft_by_page):
+            codes = ", ".join(sorted(set(draft_by_page[page])))
+            out.append(f"- [[{page}]] — {len(draft_by_page[page])} issue(s): {codes}")
+    else:
+        out.append("_(none)_")
+    out += ["", "## Open knowledge gaps", "",
+            "`query-gap` entries from `.forge/feedback.md`, newest first.", ""]
+    if gaps:
+        for g in gaps:
+            summary = g["lines"][0] if g["lines"] else ""
+            out.append(f"- [{g['ts']}] severity: {g['severity']} — {summary}")
+    else:
+        out.append("_(none)_")
+    report_path.write_text("\n".join(out).rstrip() + "\n", encoding="utf-8")
+
+
 def main():
     p = argparse.ArgumentParser(prog="lint", description="wikiforge wiki linter")
     g = p.add_mutually_exclusive_group()
@@ -400,6 +452,8 @@ def main():
     p.add_argument("--raw", default="raw", help="path to raw dir (default: raw)")
     p.add_argument("--stale-days", type=int, default=S.STALE_DAYS)
     p.add_argument("--rot-days", type=int, default=S.PLACEHOLDER_ROT_DAYS)
+    p.add_argument("--gap-days", type=int, default=90,
+                   help="knowledge-gap window for the report (default: 90)")
     args = p.parse_args()
 
     wiki_dir = Path(args.wiki).resolve()
@@ -419,9 +473,15 @@ def main():
     for i in issues:
         print(i.fmt())
     sys.stdout.flush()
-    n_err = sum(1 for i in issues if i.severity == ERROR)
-    n_warn = len(issues) - n_err
+    n_err = sum(1 for i in issues if i.is_blocking())
+    n_warn = sum(1 for i in issues if i.severity == WARNING)
     print(f"\n{n_err} error(s), {n_warn} warning(s)", file=sys.stderr)
+
+    # agent-facing report — written for report/strict runs, not --fix
+    forge_dir = wiki_dir.parent / ".forge"
+    if forge_dir.is_dir():
+        gaps = collect_gaps(forge_dir / "feedback.md", args.gap_days, today)
+        write_report(forge_dir / "lint-report.md", issues, gaps, today)
 
     if args.strict and n_err > 0:
         sys.exit(1)

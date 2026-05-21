@@ -119,6 +119,52 @@ def test_collect_gaps_missing_file(tmp_path):
     assert lint.collect_gaps(tmp_path / "nope.md", 90, datetime.date(2026, 5, 20)) == []
 
 
+def test_write_report_sections(tmp_path):
+    wiki = tmp_path / "wiki"
+    (wiki / "concepts").mkdir(parents=True)
+    (wiki / "concepts" / "live.md").write_text(
+        "---\ntitle: Live\ntype: concept\ncreated: 2026-01-01\n"
+        "last_verified: 2026-01-01\nconfidence: low\n---\n\n"
+        "Broken [[concepts/missing]].\n",
+        encoding="utf-8")
+    (wiki / "concepts" / "wip.md").write_text(
+        "---\ntitle: WIP\ntype: concept\ncreated: 2026-01-01\n"
+        "last_verified: 2026-01-01\nconfidence: likely\ndraft: true\n---\n\n"
+        "Broken [[concepts/alsomissing]].\n",
+        encoding="utf-8")
+    issues = lint.lint(wiki, tmp_path / "raw", 180, 30, datetime.date(2026, 5, 20))
+    gaps = [{"ts": "2026-05-19T10:00:00Z", "severity": "hard",
+             "lines": ["Q: Something?"]}]
+    report = tmp_path / "lint-report.md"
+    lint.write_report(report, issues, gaps, datetime.date(2026, 5, 20))
+    txt = report.read_text(encoding="utf-8")
+    assert "# Lint report" in txt
+    assert "## Errors" in txt
+    assert "## Warnings" in txt
+    assert "low-confidence" in txt
+    assert "## Draft pages" in txt
+    assert "[[concepts/wip]]" in txt
+    assert "## Open knowledge gaps" in txt
+    assert "Q: Something?" in txt
+
+
+def test_main_writes_report(tmp_path, monkeypatch):
+    workspace = tmp_path / "ws"
+    wiki = workspace / "wiki"
+    forge = workspace / ".forge"
+    (wiki / "concepts").mkdir(parents=True)
+    forge.mkdir(parents=True)
+    (wiki / "concepts" / "sgd.md").write_text(
+        "---\ntitle: SGD\ntype: concept\ncreated: 2026-01-01\n"
+        "last_verified: 2026-01-01\nconfidence: likely\n---\n\nbody\n",
+        encoding="utf-8")
+    monkeypatch.setattr("sys.argv", ["lint", "--report",
+                                     "--wiki", str(wiki),
+                                     "--raw", str(workspace / "raw")])
+    lint.main()
+    assert (forge / "lint-report.md").exists()
+
+
 def test_fix_regenerates_meta_index(tmp_path):
     wiki = tmp_path / "wiki"
     for d in ("concepts", "conventions", "code-patterns", "claims", "sources", "entities"):
