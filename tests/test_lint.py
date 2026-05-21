@@ -111,3 +111,28 @@ def test_non_draft_page_error_is_blocking(tmp_path):
         encoding="utf-8")
     issues = lint.lint(wiki, tmp_path / "raw", 180, 30, datetime.date(2026, 5, 20))
     assert any(i.is_blocking() for i in issues)
+
+
+def test_low_confidence_warns(tmp_path):
+    wiki = tmp_path / "wiki"
+    (wiki / "concepts").mkdir(parents=True)
+    (wiki / "concepts" / "stub.md").write_text(
+        _page("title: Stub\ntype: concept\ncreated: 2026-05-19\n"
+              "last_verified: 2026-05-19\nconfidence: low"),
+        encoding="utf-8")
+    issues = lint.lint(wiki, tmp_path / "raw", 180, 30, datetime.date(2026, 5, 20))
+    lc = [i for i in issues if i.code == "low-confidence"]
+    assert lc and lc[0].severity == lint.WARNING
+
+
+def test_fresh_placeholder_is_low_confidence_not_rotting(tmp_path):
+    wiki = tmp_path / "wiki"
+    (wiki / "concepts").mkdir(parents=True)
+    (wiki / "concepts" / "ph.md").write_text(
+        _page("title: PH\ntype: concept\ncreated: 2026-05-19\n"
+              "last_verified: 2026-05-19\nconfidence: placeholder"),
+        encoding="utf-8")
+    issues = lint.lint(wiki, tmp_path / "raw", 180, 30, datetime.date(2026, 5, 20))
+    codes = {i.code for i in issues}
+    assert "low-confidence" in codes
+    assert "placeholder-rotting" not in codes

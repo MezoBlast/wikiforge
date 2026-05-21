@@ -263,6 +263,11 @@ def lint(wiki_dir, raw_dir, stale_days, rot_days, today):
                 issues.append(Issue(WARNING, "placeholder-rotting", slug,
                     f"placeholder for {(today - cdate).days} days (>{rot_days})"))
 
+        # low-confidence
+        if fm.get("confidence") in ("low", "placeholder"):
+            issues.append(Issue(WARNING, "low-confidence", slug,
+                f"confidence is {fm.get('confidence')!r}"))
+
         # prose wikilinks
         if isinstance(body, str):
             for raw in WL.extract_prose_links(body):
