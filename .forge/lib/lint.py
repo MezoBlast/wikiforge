@@ -53,6 +53,49 @@ def parse_date(s):
         return None
 
 
+def _gap_date(ts):
+    """Parse an ISO-8601 timestamp from a query-gap header; None if unparseable."""
+    if not ts:
+        return None
+    try:
+        return datetime.datetime.fromisoformat(ts.replace("Z", "+00:00")).date()
+    except ValueError:
+        return None
+
+
+def collect_gaps(feedback_path, gap_days, today):
+    """Parse query-gap entries from .forge/feedback.md within `gap_days` of
+    `today`. Returns dicts {ts, severity, lines}, newest first. An entry with an
+    unparseable timestamp is kept (surfaced rather than silently dropped)."""
+    if not feedback_path.exists():
+        return []
+    cutoff = today - datetime.timedelta(days=gap_days)
+    gaps = []
+    cur = None
+    for line in feedback_path.read_text(encoding="utf-8").splitlines():
+        if line.startswith("## ") and "query-gap" in line:
+            ts = ""
+            lb, rb = line.find("["), line.find("]")
+            if 0 <= lb < rb:
+                ts = line[lb + 1:rb]
+            sev = "unknown"
+            if "severity:" in line:
+                sev = line.split("severity:", 1)[1].strip()
+            cur = {"ts": ts, "severity": sev, "lines": []}
+            gaps.append(cur)
+        elif line.startswith("## "):
+            cur = None
+        elif cur is not None and line.strip():
+            cur["lines"].append(line.rstrip())
+    kept = []
+    for g in gaps:
+        d = _gap_date(g["ts"])
+        if d is None or d >= cutoff:
+            kept.append(g)
+    kept.sort(key=lambda g: g["ts"], reverse=True)
+    return kept
+
+
 def detect_type_from_slug(slug):
     first = slug.split("/", 1)[0]
     return S.DIR_TYPES.get(first)

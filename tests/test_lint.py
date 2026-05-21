@@ -98,6 +98,27 @@ def test_stale_index_warns_when_index_md_stale(tmp_path):
     assert any("index.md" in i.page for i in stale)
 
 
+def test_collect_gaps_window_filter(tmp_path):
+    feedback = tmp_path / "feedback.md"
+    feedback.write_text(
+        "# feedback.md\n\n"
+        "## [2026-05-19T10:00:00Z] query-gap | severity: hard\n"
+        "Q: Recent question?\n"
+        "No page covers this.\n\n"
+        "## [2025-01-01T10:00:00Z] query-gap | severity: weak\n"
+        "Q: Old question?\n"
+        "Answered from a low page.\n",
+        encoding="utf-8")
+    gaps = lint.collect_gaps(feedback, 90, datetime.date(2026, 5, 20))
+    assert len(gaps) == 1
+    assert gaps[0]["severity"] == "hard"
+    assert gaps[0]["lines"][0] == "Q: Recent question?"
+
+
+def test_collect_gaps_missing_file(tmp_path):
+    assert lint.collect_gaps(tmp_path / "nope.md", 90, datetime.date(2026, 5, 20)) == []
+
+
 def test_fix_regenerates_meta_index(tmp_path):
     wiki = tmp_path / "wiki"
     for d in ("concepts", "conventions", "code-patterns", "claims", "sources", "entities"):
