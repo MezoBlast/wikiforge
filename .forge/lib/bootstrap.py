@@ -185,7 +185,7 @@ SEED_FILES = {
     ".forge/log.md": (
         "# .forge/log.md — append-only curator-side operation log\n"
         "\n"
-        "## [{today}T00:00:00Z] bootstrap | workspace created\n"
+        "## [{now}] bootstrap | workspace created\n"
     ),
     ".forge/feedback.md": (
         "# .forge/feedback.md — append-only curator feedback log\n"
@@ -196,13 +196,16 @@ SEED_FILES = {
 
 
 def create_seed_files(workspace, today, domain):
+    now = datetime.datetime.now(datetime.timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
     created = []
     for rel, template in SEED_FILES.items():
         p = workspace / rel
         if p.exists():
             continue  # don't clobber
         p.parent.mkdir(parents=True, exist_ok=True)
-        p.write_text(template.format(today=today, domain=domain), encoding="utf-8")
+        p.write_text(
+            template.format(today=today, domain=domain, now=now), encoding="utf-8"
+        )
         created.append(rel)
     return created
 
