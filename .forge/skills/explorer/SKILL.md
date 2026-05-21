@@ -77,6 +77,13 @@ For every candidate from step 1, compute a priority score and write it as a chec
 - ≤ **3** repos (repos are large; cap them separately)
 - ≤ **200 MB** total download size (estimate before fetching; for arxiv, assume ~5 MB unless you know otherwise)
 
+**MinerU ceiling.** ingest normalizes PDFs and Office files through MinerU:
+200 MB / 200 pages per file with a `MINERU_API_TOKEN` configured in
+`.forge/secrets/credentials.env`, or 10 MB / 20 pages without one. A source
+fetched beyond that ceiling will block in the queue (`[!]`) and produce a
+request-human entry — so size the slate to what ingest can actually process,
+not just to the 200 MB per-run budget above.
+
 Sort candidates by score descending. Take the top-N that fits the budget. **Drop the rest** — they're not gone, they're deferred to the next run, where the priority landscape may have changed.
 
 If you exceed the budget for a documented reason (e.g. a single high-value repo that closes 5 lint errors), record the override in the log entry: `budget overridden: 1 repo > cap because ...`. No silent overrides.
