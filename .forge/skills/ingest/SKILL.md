@@ -156,7 +156,11 @@ Use `ingest_helpers.set_queue_state(queue_path, source_path, "x")`.
 ### 9. Surface follow-ups
 
 If the source cites other sources you don't have:
-- Publicly fetchable (arxiv, github, public docs) → add a note to `.forge/queue.md` for the explorer to pick up. Don't fetch inline.
+- Publicly fetchable (arxiv, github, public docs) → do **not** queue them here.
+  The `explorer` skill's citation-chain pass walks `wiki/sources/` bodies and
+  discovers cited-but-missing sources on its own; queueing them from ingest as
+  well produces duplicate `.forge/queue.md` entries. Just make sure the citation
+  is named in your `sources/<slug>.md` body so explorer can see it.
 - Paywalled or credentialed → write a request to `.forge/requests/inbox/<id>.md` (see request-human skill).
 
 If the source contradicts an existing wiki page:

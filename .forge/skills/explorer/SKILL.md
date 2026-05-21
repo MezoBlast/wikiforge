@@ -43,7 +43,7 @@ signal (d) below. Reading them from both places would double-count.
 
 **b) Consumer feedback.** Read `dist/<latest>/feedback.md` if a built bundle exists. Each entry is a gap a downstream agent actually hit. **Always eligible** regardless of citation count.
 
-**c) Citation chains.** Walk every `wiki/sources/<slug>.md` and collect external references mentioned in the body (cited papers by name/DOI, linked repos, doc URLs). For each candidate target, count how many existing source pages mention it. This count is the **co-citation score**.
+**c) Citation chains.** Walk every `wiki/sources/<slug>.md` and collect external references mentioned in the body (cited papers by name/DOI, linked repos, doc URLs). For each candidate target, count how many existing source pages mention it. This count is the **co-citation score**. This pass is the **sole** channel for cited-but-missing sources — ingest deliberately does not pre-queue them, so explorer will not see duplicate candidates.
 
 **d) Curator query gaps.** Read `.forge/feedback.md` if it exists. The `query`
 skill appends a `query-gap` entry there whenever the wiki could not answer a
