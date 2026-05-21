@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""index.py — build the wiki/.meta/ index (pages.tsv, links.tsv).
+"""index.py — build the wiki index: wiki/.meta/ (pages.tsv, links.tsv) and index.md.
 
 wiki/.meta/ is a derived index of the wiki, consumed by the bin/wiki-* read
 scripts. It is a wiki artifact: maintained by whoever mutates the wiki (ingest
@@ -116,9 +116,47 @@ def write_meta(meta_dir, pages):
     write_links_tsv(meta_dir, pages, kept_slugs)
 
 
+def write_index_md(wiki_dir, pages, today):
+    """Render wiki_dir/index.md: a catalog of all pages grouped by type.
+
+    `pages` is an iterable of (slug, page_type, fm, body) tuples, as load_pages
+    yields. Meta files (page_type None) are skipped.
+    """
+    by_type = {}
+    for slug, page_type, fm, _ in pages:
+        if page_type is None or not isinstance(fm, dict):
+            continue
+        by_type.setdefault(page_type, []).append((slug, fm.get("title", slug)))
+    lines = [
+        "---",
+        "title: index",
+        "type: index",
+        f"created: {today.isoformat()}",
+        f"last_verified: {today.isoformat()}",
+        "---",
+        "",
+        "# Index",
+        "",
+        "Catalog of all pages, grouped by type. Rebuilt by `.forge/lib/index.py`.",
+        "",
+    ]
+    for pt in S.PAGE_TYPES:
+        lines.append(f"## {S.TYPE_DIRS[pt]}")
+        lines.append("")
+        entries = sorted(by_type.get(pt, []))
+        if not entries:
+            lines.append("_(none)_")
+        else:
+            for slug, title in entries:
+                lines.append(f"- [[{slug}]] — {title}")
+        lines.append("")
+    (wiki_dir / "index.md").write_text(
+        "\n".join(lines).rstrip() + "\n", encoding="utf-8")
+
+
 def main():
     p = argparse.ArgumentParser(prog="index",
-                                description="regenerate the wiki/.meta/ index")
+                                description="regenerate the wiki index")
     p.add_argument("--wiki", default="wiki", help="path to wiki dir (default: wiki)")
     args = p.parse_args()
     wiki_dir = Path(args.wiki).resolve()
@@ -128,8 +166,9 @@ def main():
     pages = list(load_pages(wiki_dir))
     meta_dir = wiki_dir / ".meta"
     write_meta(meta_dir, pages)
+    write_index_md(wiki_dir, pages, datetime.date.today())
     n = sum(1 for _, pt, _, _ in pages if pt is not None)
-    print(f"indexed {n} page(s) -> {meta_dir}")
+    print(f"indexed {n} page(s) -> {meta_dir} + {wiki_dir / 'index.md'}")
 
 
 if __name__ == "__main__":
