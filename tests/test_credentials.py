@@ -38,3 +38,21 @@ def test_load_credentials_real_env_wins(tmp_path, monkeypatch):
     monkeypatch.setenv("WF_TEST_TOKEN", "fromenv")
     credentials.load_credentials(f, into_environ=True)
     assert os.environ["WF_TEST_TOKEN"] == "fromenv"
+
+
+from pathlib import Path
+
+
+def test_default_path_is_absolute():
+    # DEFAULT_PATH must not be a cwd-relative string — a skill running Python
+    # from inside .forge/lib/ would otherwise resolve it wrong and drop the token.
+    assert Path(credentials.DEFAULT_PATH).is_absolute()
+
+
+def test_default_path_points_at_workspace_secrets():
+    p = Path(credentials.DEFAULT_PATH)
+    assert p.parts[-3:] == (".forge", "secrets", "credentials.env")
+    # credentials.py lives at <root>/.forge/lib/credentials.py;
+    # the default must resolve to <root>/.forge/secrets/credentials.env
+    root = Path(credentials.__file__).resolve().parents[2]
+    assert p == root / ".forge" / "secrets" / "credentials.env"

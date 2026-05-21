@@ -11,7 +11,7 @@ free-tier tooling (MinerU agent API; no Tavily web extraction).
 import os
 from pathlib import Path
 
-DEFAULT_PATH = ".forge/secrets/credentials.env"
+DEFAULT_PATH = Path(__file__).resolve().parents[2] / ".forge" / "secrets" / "credentials.env"
 
 
 def parse_env(text):
