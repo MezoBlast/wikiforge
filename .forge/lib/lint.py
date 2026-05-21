@@ -309,47 +309,13 @@ def lint(wiki_dir, raw_dir, stale_days, rot_days, today):
 
 
 def fix(wiki_dir, today):
-    """Conservative auto-fix: rebuild index.md and wiki/.meta/ from current pages."""
-    pages = discover_pages(wiki_dir)
-    by_type = {}
-    for slug, _, fm, _ in pages:
-        if slug in S.META_FILES or not isinstance(fm, dict):
-            continue
-        t = fm.get("type")
-        if t not in S.PAGE_TYPES:
-            continue
-        by_type.setdefault(t, []).append((slug, fm.get("title", slug)))
-
-    lines = [
-        "---",
-        "title: index",
-        "type: index",
-        f"created: {today.isoformat()}",
-        f"last_verified: {today.isoformat()}",
-        "---",
-        "",
-        "# Index",
-        "",
-        "Catalog of all pages, grouped by type. Rebuilt by `lint --fix`.",
-        "",
-    ]
-    for pt in S.PAGE_TYPES:
-        plural = S.TYPE_DIRS[pt]
-        lines.append(f"## {plural}")
-        lines.append("")
-        entries = sorted(by_type.get(pt, []))
-        if not entries:
-            lines.append("_(none)_")
-        else:
-            for slug, title in entries:
-                lines.append(f"- [[{slug}]] — {title}")
-        lines.append("")
-
-    (wiki_dir / "index.md").write_text("\n".join(lines).rstrip() + "\n", encoding="utf-8")
+    """Conservative auto-fix: rebuild index.md and wiki/.meta/ from current
+    pages, via index.py. Never deletes or mutates pages."""
+    pages = list(index.load_pages(wiki_dir))
+    index.write_index_md(wiki_dir, pages, today)
     print(f"rebuilt {wiki_dir / 'index.md'}")
-    meta_dir = wiki_dir / ".meta"
-    index.write_meta(meta_dir, index.load_pages(wiki_dir))
-    print(f"rebuilt {meta_dir}")
+    index.write_meta(wiki_dir / ".meta", pages)
+    print(f"rebuilt {wiki_dir / '.meta'}")
 
 
 def main():
