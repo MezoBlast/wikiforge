@@ -65,6 +65,8 @@ def set_credential(key, value, *, path=None):
     """
     if not value or not value.strip():
         raise ValueError(f"refusing to write empty value for {key}")
+    if "\n" in value or "\r" in value:
+        raise ValueError(f"refusing to write multi-line value for {key}")
     target = Path(path) if path is not None else DEFAULT_PATH
     new_line = f"{key}={value}\n"
     pattern = re.compile(r"^\s*#?\s*" + re.escape(key) + r"\s*=")

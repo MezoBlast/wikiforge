@@ -1,5 +1,8 @@
 import os
+import stat
 from pathlib import Path
+
+import pytest
 
 import credentials
 
@@ -55,10 +58,6 @@ def test_default_path_points_at_workspace_secrets():
     root = Path(credentials.__file__).resolve().parents[2]
     assert p == root / ".forge" / "secrets" / "credentials.env"
 
-
-import stat
-
-import pytest
 
 
 def test_set_credential_uncomments_commented_key(tmp_path):
@@ -131,3 +130,24 @@ def test_set_credential_does_not_change_existing_file_mode(tmp_path):
     credentials.set_credential("K", "v", path=f)
     mode = stat.S_IMODE(f.stat().st_mode)
     assert mode == 0o644
+
+
+def test_set_credential_newline_in_value_rejected(tmp_path):
+    f = tmp_path / "c.env"
+    f.write_text("# K=\n")
+    with pytest.raises(ValueError):
+        credentials.set_credential("K", "good\nevil=injected", path=f)
+
+
+def test_set_credential_carriage_return_in_value_rejected(tmp_path):
+    f = tmp_path / "c.env"
+    f.write_text("# K=\n")
+    with pytest.raises(ValueError):
+        credentials.set_credential("K", "good\rugly", path=f)
+
+
+def test_set_credential_handles_empty_existing_file(tmp_path):
+    f = tmp_path / "c.env"
+    f.write_text("")
+    credentials.set_credential("K", "v", path=f)
+    assert f.read_text() == "K=v\n"
