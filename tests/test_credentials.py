@@ -54,3 +54,80 @@ def test_default_path_points_at_workspace_secrets():
     # the default must resolve to <root>/.forge/secrets/credentials.env
     root = Path(credentials.__file__).resolve().parents[2]
     assert p == root / ".forge" / "secrets" / "credentials.env"
+
+
+import stat
+
+import pytest
+
+
+def test_set_credential_uncomments_commented_key(tmp_path):
+    f = tmp_path / "c.env"
+    f.write_text("# MINERU_API_TOKEN=\n# TAVILY_API_KEY=\n")
+    credentials.set_credential("MINERU_API_TOKEN", "abc123", path=f)
+    text = f.read_text()
+    assert "MINERU_API_TOKEN=abc123\n" in text
+    # The OTHER commented line is preserved exactly.
+    assert "# TAVILY_API_KEY=\n" in text
+
+
+def test_set_credential_updates_existing_uncommented_key(tmp_path):
+    f = tmp_path / "c.env"
+    f.write_text("MINERU_API_TOKEN=old\n")
+    credentials.set_credential("MINERU_API_TOKEN", "new", path=f)
+    assert f.read_text() == "MINERU_API_TOKEN=new\n"
+
+
+def test_set_credential_appends_new_key(tmp_path):
+    f = tmp_path / "c.env"
+    f.write_text("OTHER=foo\n")
+    credentials.set_credential("NEW_KEY", "bar", path=f)
+    text = f.read_text()
+    assert "OTHER=foo\n" in text
+    assert "NEW_KEY=bar\n" in text
+
+
+def test_set_credential_preserves_other_lines(tmp_path):
+    f = tmp_path / "c.env"
+    seed = "# header comment\n\nFIRST=1\n# commented note\nSECOND=2\n"
+    f.write_text(seed)
+    credentials.set_credential("SECOND", "two", path=f)
+    text = f.read_text()
+    assert "# header comment\n" in text
+    assert "\n\n" in text             # blank line preserved
+    assert "FIRST=1\n" in text
+    assert "# commented note\n" in text
+    assert "SECOND=two\n" in text
+    assert "SECOND=2\n" not in text   # old value gone
+
+
+def test_set_credential_empty_value_rejected(tmp_path):
+    f = tmp_path / "c.env"
+    f.write_text("# K=\n")
+    with pytest.raises(ValueError):
+        credentials.set_credential("K", "", path=f)
+
+
+def test_set_credential_whitespace_value_rejected(tmp_path):
+    f = tmp_path / "c.env"
+    f.write_text("# K=\n")
+    with pytest.raises(ValueError):
+        credentials.set_credential("K", "   ", path=f)
+
+
+def test_set_credential_creates_file_with_secure_mode(tmp_path):
+    f = tmp_path / "fresh.env"
+    assert not f.exists()
+    credentials.set_credential("K", "v", path=f)
+    assert f.read_text() == "K=v\n"
+    mode = stat.S_IMODE(f.stat().st_mode)
+    assert mode == 0o600
+
+
+def test_set_credential_does_not_change_existing_file_mode(tmp_path):
+    f = tmp_path / "c.env"
+    f.write_text("# K=\n")
+    os.chmod(f, 0o644)
+    credentials.set_credential("K", "v", path=f)
+    mode = stat.S_IMODE(f.stat().st_mode)
+    assert mode == 0o644
