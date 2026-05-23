@@ -60,7 +60,7 @@ the re-run in Test A correctly deduplicates.
    `# MINERU_API_TOKEN=` line commented out.
 2. Place an arxiv PDF larger than 10 MB at `raw/papers/<id>.pdf`. The MMMU
    paper at 17 MB is a representative case:
-   `curl -sLo raw/papers/2311.16502.pdf https://arxiv.org/pdf/2311.16502`.
+   `curl -sLo raw/papers/2311.16502.pdf https://arxiv.org/pdf/2311.16502.pdf`.
 3. Invoke `ingest raw/papers/<id>.pdf`.
 
 **Expected — Continue path (interactive):**
@@ -104,3 +104,13 @@ the re-run in Test A correctly deduplicates.
 - The queue entry is set to `[!]`; a `request-human` entry of type
   `large-download` is written to `.forge/requests/inbox/`. No `.converted/`
   is produced. Lint exits 0 (the source is blocked, not corrupt).
+
+**Negative case — `.url` fetch failure (Tavily unavailable):**
+
+- Drop a `raw/web/example.url` whose single line is a URL, with no `TAVILY_API_KEY`
+  configured (or with the `tvly` CLI uninstalled). `normalize_source` raises
+  `NormalizeError`; `agent_extract_advice` returns
+  `(False, "none", "Tavily fetch failure; URL retrieval cannot be self-handled")`.
+- Queue entry is set to `[!]`; a `request-human` entry of `type: paid-api`
+  is written to `.forge/requests/inbox/`. No `.converted/` is produced.
+  Lint exits 0.
