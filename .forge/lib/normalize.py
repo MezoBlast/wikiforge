@@ -26,6 +26,9 @@ HTML_EXTS = {".html", ".htm"}
 URL_EXTS = {".url", ".weblink"}
 PLAINTEXT_EXTS = {".md", ".markdown", ".txt"}
 
+_AGENT_OFFICEX_EXTS = {".docx", ".pptx", ".xlsx"}
+_MINERU_FREE_TIER_MB = 10
+
 _MINERU = Path(__file__).resolve().parent / "mineru_api.py"
 
 
@@ -150,3 +153,44 @@ def _convert_url(src, out_dir):
             f"Check that TAVILY_API_KEY is set in .forge/secrets/credentials.env. "
             f"stderr: {proc.stderr.strip()[-300:]}"
         )
+
+
+def agent_extract_advice(raw_path):
+    """Whether raw_path is a candidate for an agent self-extract fallback.
+
+    Returns (eligible, mechanism, reason).
+    - mechanism is one of 'pdf-read', 'unzip-officex', 'html-text', 'none'.
+    - reason is a diagnostic string for the warning prompt and the headless
+      log line; it is NOT load-bearing for control flow.
+    """
+    p = Path(raw_path)
+    ext = p.suffix.lower()
+    try:
+        creds = load_credentials(into_environ=False)
+    except Exception:
+        creds = {}
+    token_present = bool(creds.get("MINERU_API_TOKEN", "").strip())
+    size_mb = None
+    if p.exists() and p.is_file():
+        size_mb = p.stat().st_size / (1024 * 1024)
+
+    if ext == ".pdf":
+        return True, "pdf-read", _mineru_reason(size_mb, token_present)
+    if ext in _AGENT_OFFICEX_EXTS:
+        return True, "unzip-officex", _mineru_reason(size_mb, token_present)
+    if ext in HTML_EXTS:
+        return True, "html-text", "markdownify path failed (offline converter)"
+    if ext == ".xls":
+        return False, "none", "legacy OLE binary, not self-extractable"
+    if ext in URL_EXTS:
+        return False, "none", "Tavily fetch failure; URL retrieval cannot be self-handled"
+    return False, "none", f"no normalizer for extension {ext!r}"
+
+
+def _mineru_reason(size_mb, token_present):
+    if size_mb is not None and size_mb > _MINERU_FREE_TIER_MB and not token_present:
+        return (f"{size_mb:.1f} MB > {_MINERU_FREE_TIER_MB} MB free-tier; "
+                f"no MINERU_API_TOKEN")
+    if not token_present:
+        return "MinerU free-tier subprocess failed; no MINERU_API_TOKEN"
+    return "MinerU subprocess failed with token configured"

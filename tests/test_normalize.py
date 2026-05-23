@@ -161,3 +161,113 @@ def test_url_missing_cli_raises(tmp_path, monkeypatch):
     monkeypatch.setattr(normalize.subprocess, "run", fake_run)
     with pytest.raises(normalize.NormalizeError, match="Tavily CLI"):
         normalize.normalize_source(src)
+
+
+def test_agent_extract_advice_pdf_oversize_no_token(tmp_path, monkeypatch):
+    p = tmp_path / "big.pdf"
+    p.write_bytes(b"x" * (11 * 1024 * 1024))   # 11 MB > 10 MB
+    monkeypatch.setattr(normalize, "load_credentials", lambda **kw: {})
+    eligible, mechanism, reason = normalize.agent_extract_advice(p)
+    assert eligible is True
+    assert mechanism == "pdf-read"
+    assert "10 MB" in reason
+    assert "MINERU_API_TOKEN" in reason
+
+
+def test_agent_extract_advice_pdf_small_no_token(tmp_path, monkeypatch):
+    p = tmp_path / "small.pdf"
+    p.write_bytes(b"x" * 1024)
+    monkeypatch.setattr(normalize, "load_credentials", lambda **kw: {})
+    eligible, mechanism, reason = normalize.agent_extract_advice(p)
+    assert eligible is True
+    assert mechanism == "pdf-read"
+    assert "MINERU_API_TOKEN" in reason
+
+
+def test_agent_extract_advice_pdf_token_present(tmp_path, monkeypatch):
+    p = tmp_path / "p.pdf"
+    p.write_bytes(b"x" * 1024)
+    monkeypatch.setattr(normalize, "load_credentials",
+                        lambda **kw: {"MINERU_API_TOKEN": "tok123"})
+    eligible, mechanism, reason = normalize.agent_extract_advice(p)
+    assert eligible is True
+    assert mechanism == "pdf-read"
+    assert "token" in reason.lower()
+
+
+def test_agent_extract_advice_docx(tmp_path, monkeypatch):
+    p = tmp_path / "f.docx"
+    p.write_bytes(b"PK\x03\x04")
+    monkeypatch.setattr(normalize, "load_credentials", lambda **kw: {})
+    eligible, mechanism, _ = normalize.agent_extract_advice(p)
+    assert (eligible, mechanism) == (True, "unzip-officex")
+
+
+def test_agent_extract_advice_pptx(tmp_path, monkeypatch):
+    p = tmp_path / "f.pptx"
+    p.write_bytes(b"PK\x03\x04")
+    monkeypatch.setattr(normalize, "load_credentials", lambda **kw: {})
+    eligible, mechanism, _ = normalize.agent_extract_advice(p)
+    assert (eligible, mechanism) == (True, "unzip-officex")
+
+
+def test_agent_extract_advice_xlsx(tmp_path, monkeypatch):
+    p = tmp_path / "f.xlsx"
+    p.write_bytes(b"PK\x03\x04")
+    monkeypatch.setattr(normalize, "load_credentials", lambda **kw: {})
+    eligible, mechanism, _ = normalize.agent_extract_advice(p)
+    assert (eligible, mechanism) == (True, "unzip-officex")
+
+
+def test_agent_extract_advice_html(tmp_path, monkeypatch):
+    p = tmp_path / "page.html"
+    p.write_text("<p>hi</p>")
+    monkeypatch.setattr(normalize, "load_credentials", lambda **kw: {})
+    eligible, mechanism, _ = normalize.agent_extract_advice(p)
+    assert (eligible, mechanism) == (True, "html-text")
+
+
+def test_agent_extract_advice_htm(tmp_path, monkeypatch):
+    p = tmp_path / "page.htm"
+    p.write_text("<p>hi</p>")
+    monkeypatch.setattr(normalize, "load_credentials", lambda **kw: {})
+    eligible, mechanism, _ = normalize.agent_extract_advice(p)
+    assert (eligible, mechanism) == (True, "html-text")
+
+
+def test_agent_extract_advice_xls(tmp_path, monkeypatch):
+    p = tmp_path / "f.xls"
+    p.write_bytes(b"\xd0\xcf\x11\xe0")
+    monkeypatch.setattr(normalize, "load_credentials", lambda **kw: {})
+    eligible, mechanism, reason = normalize.agent_extract_advice(p)
+    assert eligible is False
+    assert mechanism == "none"
+    assert ("ole" in reason.lower()) or ("legacy" in reason.lower())
+
+
+def test_agent_extract_advice_url(tmp_path, monkeypatch):
+    p = tmp_path / "x.url"
+    p.write_text("https://example.com\n")
+    monkeypatch.setattr(normalize, "load_credentials", lambda **kw: {})
+    eligible, mechanism, reason = normalize.agent_extract_advice(p)
+    assert eligible is False
+    assert mechanism == "none"
+    assert ("tavily" in reason.lower()) or ("fetch" in reason.lower())
+
+
+def test_agent_extract_advice_weblink(tmp_path, monkeypatch):
+    p = tmp_path / "x.weblink"
+    p.write_text("https://example.com\n")
+    monkeypatch.setattr(normalize, "load_credentials", lambda **kw: {})
+    eligible, mechanism, _ = normalize.agent_extract_advice(p)
+    assert (eligible, mechanism) == (False, "none")
+
+
+def test_agent_extract_advice_unknown_extension(tmp_path, monkeypatch):
+    p = tmp_path / "thing.xyz"
+    p.write_text("data")
+    monkeypatch.setattr(normalize, "load_credentials", lambda **kw: {})
+    eligible, mechanism, reason = normalize.agent_extract_advice(p)
+    assert eligible is False
+    assert mechanism == "none"
+    assert "no normalizer" in reason.lower()
