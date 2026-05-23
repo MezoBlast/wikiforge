@@ -82,12 +82,74 @@ precision API (200MB / 200 pages). The Tavily path needs `TAVILY_API_KEY` in the
 same file. `normalize_source` loads `.forge/secrets/credentials.env`
 automatically — you do not load it yourself.
 
-**If normalization fails** (`NormalizeError`) — e.g. a PDF over the free-tier
-limit with no token, or the Tavily CLI not installed — do NOT draft a page from
-an unreadable source. Set the queue entry to `[!]` blocked
+**If normalization fails** (`NormalizeError`), the ingest agent consults
+`normalize.agent_extract_advice(path)` and either self-extracts or escalates.
+
+```python
+from normalize import normalize_source, NormalizeError, agent_extract_advice
+
+try:
+    readable = normalize_source(path)
+except NormalizeError:
+    eligible, mechanism, reason = agent_extract_advice(path)
+    if eligible:
+        # self-extract per `mechanism` (see table below), write
+        # <stem>.converted/<stem>.md, then re-call normalize_source(path)
+        ...
+    else:
+        # set queue entry [!] + request-human (escalation table below)
+        ...
+```
+
+#### Agent self-extract fallback
+
+When `eligible` is True, perform the self-extract for the named `mechanism`,
+write `<stem>.converted/<stem>.md` whose first line is the provenance header
+
+```
+<!-- converted: agent-extracted fallback (<mechanism>, reason: <reason>), <YYYY-MM-DD> -->
+```
+
+then re-call `normalize_source(path)`; it idempotently returns the just-written
+markdown (existing `<stem>.converted/` reuse path).
+
+| `mechanism`     | What the agent does                                                                                       |
+| --------------- | --------------------------------------------------------------------------------------------------------- |
+| `pdf-read`      | Use the agent's native PDF read tool; paginate ≤ 20 pages per call; concatenate to one markdown body.     |
+| `unzip-officex` | `unzip -p file.docx word/document.xml` (or `ppt/slides/slide*.xml`, or `xl/sharedStrings.xml` + `xl/worksheets/sheet*.xml`); strip XML to text — `<w:t>` for docx, `<a:t>` for pptx (one section per slide), tab-separated rows per sheet for xlsx. |
+| `html-text`     | Read the file as text; emit markdown — headings, body, basic tables.                                      |
+
+If the agent's own extraction fails (encrypted PDF, corrupt zip, pure-scanned
+PDF needing OCR), fall through to the escalation block below — do not draft a
+page from an unreadable source.
+
+After a successful self-extract:
+
+- **Interactive runtime** — prompt the user with two options:
+  - **Continue** — keep the agent-extracted conversion; ingest proceeds.
+  - **Provide a `MINERU_API_TOKEN`** — user pastes a token; call
+    `credentials.set_credential("MINERU_API_TOKEN", value)` to save it to
+    `.forge/secrets/credentials.env`, then re-call
+    `normalize_source(path, force=True)` so MinerU overwrites the
+    agent-extracted conversion with a higher-fidelity one.
+- **Headless runtime (no human reachable)** — skip the prompt; append one
+  line to `.forge/log.md`:
+
+  ```
+  ## [<UTC>] ingest | self-extracted <path> (<mechanism>, reason: <reason>); configure MINERU_API_TOKEN for higher-fidelity conversion
+  ```
+
+#### Escalation (no self-extract path)
+
+When `agent_extract_advice` returns `eligible=False` — `.xls` legacy binary,
+`.url/.weblink` fetch failures, or unknown extensions — set the queue entry
+to `[!]` blocked
 (`ingest_helpers.set_queue_state(queue_path, source_path, "!", note="req <id>")`)
-and write a request via the request-human skill (`type: large-download` for an
-oversize PDF, `type: paid-api` or `human-judgement` otherwise).
+and file a request via the request-human skill:
+
+- `type: large-download` for an oversize `.xls`,
+- `type: paid-api` for a Tavily-fetched URL failure,
+- `type: human-judgement` otherwise.
 
 ### 4. Read the source
 
