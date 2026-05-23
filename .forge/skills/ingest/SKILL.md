@@ -86,6 +86,7 @@ automatically — you do not load it yourself.
 `normalize.agent_extract_advice(path)` and either self-extracts or escalates.
 
 ```python
+import credentials
 from normalize import normalize_source, NormalizeError, agent_extract_advice
 
 try:
@@ -116,7 +117,7 @@ markdown (existing `<stem>.converted/` reuse path).
 | `mechanism`     | What the agent does                                                                                       |
 | --------------- | --------------------------------------------------------------------------------------------------------- |
 | `pdf-read`      | Use the agent's native PDF read tool; paginate ≤ 20 pages per call; concatenate to one markdown body.     |
-| `unzip-officex` | `unzip -p file.docx word/document.xml` (or `ppt/slides/slide*.xml`, or `xl/sharedStrings.xml` + `xl/worksheets/sheet*.xml`); strip XML to text — `<w:t>` for docx, `<a:t>` for pptx (one section per slide), tab-separated rows per sheet for xlsx. |
+| `unzip-officex` | Read the relevant XML parts of the Office Open XML zip — `word/document.xml` for docx; `ppt/slides/slide*.xml` (one section per slide) for pptx; `xl/sharedStrings.xml` + `xl/worksheets/sheet*.xml` for xlsx. Use `unzip -p file 'PATTERN'` (single-quoted to keep the shell out of the glob) or Python's `zipfile` module. Strip XML to text — `<w:t>` runs for docx, `<a:t>` runs for pptx, tab-separated rows per sheet for xlsx. |
 | `html-text`     | Read the file as text; emit markdown — headings, body, basic tables.                                      |
 
 If the agent's own extraction fails (encrypted PDF, corrupt zip, pure-scanned
