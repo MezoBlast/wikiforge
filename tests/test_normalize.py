@@ -192,7 +192,7 @@ def test_agent_extract_advice_pdf_token_present(tmp_path, monkeypatch):
     eligible, mechanism, reason = normalize.agent_extract_advice(p)
     assert eligible is True
     assert mechanism == "pdf-read"
-    assert "token" in reason.lower()
+    assert "token configured" in reason.lower()
 
 
 def test_agent_extract_advice_docx(tmp_path, monkeypatch):

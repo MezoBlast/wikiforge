@@ -168,6 +168,8 @@ def agent_extract_advice(raw_path):
     try:
         creds = load_credentials(into_environ=False)
     except Exception:
+        # Any failure (missing file, unreadable file, parse error) is treated
+        # as "no credentials"; reason is best-effort and not load-bearing.
         creds = {}
     token_present = bool(creds.get("MINERU_API_TOKEN", "").strip())
     size_mb = None
@@ -179,7 +181,7 @@ def agent_extract_advice(raw_path):
     if ext in _AGENT_OFFICEX_EXTS:
         return True, "unzip-officex", _mineru_reason(size_mb, token_present)
     if ext in HTML_EXTS:
-        return True, "html-text", "markdownify path failed (offline converter)"
+        return True, "html-text", "markdownify conversion failed (offline converter)"
     if ext == ".xls":
         return False, "none", "legacy OLE binary, not self-extractable"
     if ext in URL_EXTS:
