@@ -51,3 +51,56 @@ or the ingest helpers.
 
 All three tests produce lint-clean pages with no manual frontmatter fixes, and
 the re-run in Test A correctly deduplicates.
+
+## Scenario: Oversize PDF fallback (agent self-extract)
+
+**Setup:**
+1. Start from a freshly bootstrapped workspace with no MINERU_API_TOKEN
+   configured — the seeded `.forge/secrets/credentials.env` has the
+   `# MINERU_API_TOKEN=` line commented out.
+2. Place an arxiv PDF larger than 10 MB at `raw/papers/<id>.pdf`. The MMMU
+   paper at 17 MB is a representative case:
+   `curl -sLo raw/papers/2311.16502.pdf https://arxiv.org/pdf/2311.16502`.
+3. Invoke `ingest raw/papers/<id>.pdf`.
+
+**Expected — Continue path (interactive):**
+
+- `normalize_source` raises NormalizeError; the agent calls
+  `agent_extract_advice` and gets `(True, "pdf-read", "<size> MB > 10 MB ...; no MINERU_API_TOKEN")`.
+- The agent reads the PDF paginated and writes
+  `raw/papers/<id>.converted/<id>.md`. Its first line is
+  `<!-- converted: agent-extracted fallback (pdf-read, reason: ...), <date> -->`.
+- The agent prompts: "<file> exceeded MinerU's free tier; I self-extracted
+  it. Continue, or provide a MINERU_API_TOKEN to retry with MinerU?".
+- User picks **Continue**.
+- The queue entry advances to `[x]`; `wiki/sources/<slug>.md` is drafted
+  normally.
+- `python3 .forge/lib/lint.py --strict` exits 0.
+
+**Expected — Provide-token path (interactive):**
+
+- Same setup; user picks **Provide a MINERU_API_TOKEN** and pastes a token.
+- Agent calls `credentials.set_credential("MINERU_API_TOKEN", <value>)`;
+  `.forge/secrets/credentials.env` now carries an uncommented
+  `MINERU_API_TOKEN=<value>` line (verify the key by name; never paste a real
+  token into this runbook).
+- Agent re-calls `normalize_source(path, force=True)`; MinerU overwrites
+  `raw/papers/<id>.converted/<id>.md`. Its first line is now MinerU's own
+  output, not the agent-extracted provenance header.
+- Queue entry `[x]`; lint exits 0.
+
+**Expected — Headless path (no interactive prompt available):**
+
+- Same setup; the agent runtime has no way to prompt the user.
+- The agent does NOT prompt. It keeps the self-extracted conversion.
+- `.forge/log.md` carries one new line:
+  `## [<UTC>] ingest | self-extracted <path> (pdf-read, reason: ...); configure MINERU_API_TOKEN for higher-fidelity conversion`.
+- Queue entry `[x]`; lint exits 0.
+
+**Negative case — `.xls` legacy file:**
+
+- Drop a `.xls` file in `raw/docs/`. `normalize_source` raises NormalizeError;
+  `agent_extract_advice` returns `(False, "none", "legacy OLE binary, ...")`.
+- The queue entry is set to `[!]`; a `request-human` entry of type
+  `large-download` is written to `.forge/requests/inbox/`. No `.converted/`
+  is produced. Lint exits 0 (the source is blocked, not corrupt).
