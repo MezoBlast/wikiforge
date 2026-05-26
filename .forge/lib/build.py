@@ -243,11 +243,12 @@ def main():
     p = argparse.ArgumentParser(prog="build", description="wikiforge bundle builder")
     p.add_argument("--workspace", default=".", help="curator workspace root (default: cwd)")
     p.add_argument("--version", required=True, help="semver, e.g. 0.1.0")
-    p.add_argument("--keep-placeholders", action="store_true",
-                   help="include pages with confidence: placeholder (default: drop)")
+    p.add_argument("--drop-placeholders", action="store_true",
+                   help="drop pages with confidence: placeholder "
+                        "(default: keep — placeholders are known-gap markers)")
     p.add_argument("--tar", action="store_true", help="also create a .tar.gz of the bundle")
     args = p.parse_args()
-    build(args.workspace, args.version, not args.keep_placeholders, args.tar)
+    build(args.workspace, args.version, args.drop_placeholders, args.tar)
 
 
 if __name__ == "__main__":
