@@ -70,6 +70,10 @@ def validate_no_dangling_refs(kept_pages, kept_slugs):
     for slug, pt, fm, body in kept_pages:
         if pt is None:
             continue  # meta files like manifest.md have no slug-typed refs to validate
+        if isinstance(fm, dict):
+            for edge, target in WL.extract_frontmatter_edges(fm):
+                if not resolves(target):
+                    dangling.append((slug, f"frontmatter:{edge}", target))
         if isinstance(body, str):
             for target in WL.extract_prose_links(body):
                 if not resolves(target):
