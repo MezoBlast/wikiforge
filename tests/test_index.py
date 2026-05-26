@@ -135,3 +135,24 @@ def test_write_links_tsv_raises_on_unresolved_prose_target(tmp_path):
     meta.mkdir()
     with pytest.raises(RuntimeError, match="unresolved target"):
         index.write_links_tsv(meta, pages, {"concepts/a"})
+
+
+def test_write_links_tsv_skips_meta_pages_with_prose_wikilinks(tmp_path):
+    """Meta files (pt=None) with prose wikilinks must not crash write_links_tsv.
+
+    The multimodal-llm fixture's manifest.md contains [[out_of_scope]] and
+    [[index]] — both meta slugs absent from kept_slugs. write_links_tsv must
+    skip pages with pt=None so meta-page prose links never reach the
+    unresolved-target assertion."""
+    pages = [
+        ("manifest", None, None, "See [[out_of_scope]]. Also [[index]]."),
+        ("concepts/a", "concept",
+         {"title": "A", "type": "concept", "confidence": "likely"},
+         "Clean body."),
+    ]
+    meta = tmp_path / ".meta"
+    meta.mkdir()
+    index.write_links_tsv(meta, pages, {"concepts/a"})  # must not raise
+    links = (meta / "links.tsv").read_text(encoding="utf-8")
+    # Header line only — no rows from the meta page
+    assert links.strip().splitlines() == ["from\tto\tedge_type"]
