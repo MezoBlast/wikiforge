@@ -90,7 +90,7 @@ The bug was first surfaced on the multimodal-llm fixture (5 dangling refs to
 `concepts/clip` and `concepts/clip-loss` after the build dropped them as
 placeholders). After this fix:
 
-- Default build: 24 pages (0 dropped). Both `concepts/clip` and
+- Default build: 20 pages (0 dropped). Both `concepts/clip` and
   `concepts/clip-loss` ship as `confidence: placeholder` known-gap markers.
 - `--drop-placeholders`: fails fast with 5 dangling-ref diagnostics, no
   partial bundle written.
