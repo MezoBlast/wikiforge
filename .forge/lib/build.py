@@ -148,6 +148,16 @@ def build(workspace, version, drop_placeholder, do_tar):
     run_lint(wiki_dir, raw_dir)
 
     bundle = workspace / "dist" / f"{name}-v{version}"
+
+    all_pages = list(index.load_pages(wiki_dir))
+    kept = [p for p in all_pages if not should_drop(p[0], p[1], p[2], drop_placeholder)]
+    kept_slugs = {slug for slug, pt, _, _ in kept if pt is not None}
+    n_dropped = len(all_pages) - len(kept)
+    print(f"    kept {len(kept)} pages ({n_dropped} dropped via draft/placeholder filter)")
+
+    print("==> validating refs")
+    validate_no_dangling_refs(kept, kept_slugs)
+
     if bundle.exists():
         shutil.rmtree(bundle)
     bundle.mkdir(parents=True)
@@ -156,12 +166,6 @@ def build(workspace, version, drop_placeholder, do_tar):
     out_wiki.mkdir()
     out_meta = out_wiki / ".meta"
     out_meta.mkdir()
-
-    all_pages = list(index.load_pages(wiki_dir))
-    kept = [p for p in all_pages if not should_drop(p[0], p[1], p[2], drop_placeholder)]
-    kept_slugs = {slug for slug, pt, _, _ in kept if pt is not None}
-    n_dropped = len(all_pages) - len(kept)
-    print(f"    kept {len(kept)} pages ({n_dropped} dropped via draft/placeholder filter)")
 
     for slug, pt, fm, body in kept:
         if pt is None and slug in SHIPPED_META:
