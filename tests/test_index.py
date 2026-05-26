@@ -114,3 +114,24 @@ def test_index_main_writes_index_md(tmp_path, monkeypatch):
     index.main()
     assert (wiki / "index.md").exists()
     assert (wiki / ".meta" / "pages.tsv").exists()
+
+
+def test_write_links_tsv_raises_on_unresolved_prose_target(tmp_path):
+    """Defense-in-depth: validate_no_dangling_refs should catch this upstream,
+    but if a caller bypasses it, write_links_tsv must fail loudly."""
+    import pytest
+    wiki = tmp_path / "wiki"
+    (wiki / "concepts").mkdir(parents=True)
+    (wiki / "concepts" / "a.md").write_text(
+        _page("title: A\ntype: concept\ncreated: 2026-01-01\n"
+              "last_verified: 2026-01-01\nconfidence: likely"),
+        encoding="utf-8")
+    pages = list(index.load_pages(wiki))
+    # Body has no dangling refs yet — inject one manually to simulate
+    # a caller bypassing validate_no_dangling_refs:
+    pages = [(slug, pt, fm, "See [[concepts/does-not-exist]].")
+             for slug, pt, fm, body in pages if pt == "concept"]
+    meta = wiki / ".meta"
+    meta.mkdir()
+    with pytest.raises(RuntimeError, match="unresolved target"):
+        index.write_links_tsv(meta, pages, {"concepts/a"})

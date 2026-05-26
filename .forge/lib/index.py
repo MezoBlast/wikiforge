@@ -86,13 +86,23 @@ def write_links_tsv(meta_dir, pages, kept_slugs):
                         f"vocabulary is {sorted(S.EDGE_TYPES)}"
                     )
                 resolved = resolve(target)
-                if resolved:
-                    typed[(slug, resolved)] = edge
+                if not resolved:
+                    raise RuntimeError(
+                        f"internal: unresolved target {target!r} from {slug!r} "
+                        f"(frontmatter:{edge}) reached write_links_tsv; "
+                        f"validate_no_dangling_refs should have caught this"
+                    )
+                typed[(slug, resolved)] = edge
         if isinstance(body, str):
             for raw in WL.extract_prose_links(body):
                 resolved = resolve(raw)
-                if resolved:
-                    prose.add((slug, resolved))
+                if not resolved:
+                    raise RuntimeError(
+                        f"internal: unresolved target {raw!r} from {slug!r} "
+                        f"(body) reached write_links_tsv; "
+                        f"validate_no_dangling_refs should have caught this"
+                    )
+                prose.add((slug, resolved))
 
     rows = ["from\tto\tedge_type"]
     seen = set()
