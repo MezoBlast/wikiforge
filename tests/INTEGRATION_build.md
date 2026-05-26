@@ -83,3 +83,23 @@ Expected:
 ```sh
 rm -rf $WS/dist/*-v0.1.0 $WS/dist/*-v0.1.1 $WS/dist/*-v0.1.2
 ```
+
+## Real-world regression — multimodal-llm fixture (2026-05-25)
+
+The bug was first surfaced on the multimodal-llm fixture (5 dangling refs to
+`concepts/clip` and `concepts/clip-loss` after the build dropped them as
+placeholders). After this fix:
+
+- Default build: 24 pages (0 dropped). Both `concepts/clip` and
+  `concepts/clip-loss` ship as `confidence: placeholder` known-gap markers.
+- `--drop-placeholders`: fails fast with 5 dangling-ref diagnostics, no
+  partial bundle written.
+
+Reproducible from any bootstrapped workspace that ingested the four sources
+in `dev-tools/fixtures/multimodal-llm/raw/`.
+
+Note: the regression run also surfaced a secondary bug in `write_links_tsv`
+where meta files (manifest, out_of_scope) with prose `[[wikilinks]]` in their
+body were incorrectly traversed, crashing with a RuntimeError instead of
+being silently skipped (as `validate_no_dangling_refs` correctly does). Fixed
+by adding a `pt is None: continue` guard at the top of the loop.

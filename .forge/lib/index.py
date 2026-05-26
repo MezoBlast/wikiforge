@@ -77,7 +77,9 @@ def write_links_tsv(meta_dir, pages, kept_slugs):
     typed = {}        # (from, to) -> edge_type
     prose = set()     # (from, to) for references
 
-    for slug, _, fm, body in pages:
+    for slug, pt, fm, body in pages:
+        if pt is None:
+            continue  # meta files (manifest, index, log, out_of_scope) — skip
         if isinstance(fm, dict):
             for edge, target in WL.extract_frontmatter_edges(fm):
                 if edge not in S.EDGE_TYPES:
