@@ -68,3 +68,26 @@ def test_basename_shorthand_resolves():
     ]
     kept_slugs = {"concepts/a", "concepts/sgd"}
     build.validate_no_dangling_refs(pages, kept_slugs)  # must not raise
+
+
+def test_reports_all_failures_in_sorted_order(capsys):
+    pages = [
+        _page(
+            "z-page",
+            "concept",
+            "[[missing-c]] and [[missing-a]] and [[missing-b]].",
+        ),
+        _page("a-page", "concept", "[[missing-z]]."),
+    ]
+    kept_slugs = {"z-page", "a-page"}
+    with pytest.raises(SystemExit) as excinfo:
+        build.validate_no_dangling_refs(pages, kept_slugs)
+    err = capsys.readouterr().err
+    lines = [l for l in err.splitlines() if l.startswith("dangling-ref:")]
+    assert len(lines) == 4
+    # Sorted by (from_slug, source, target):
+    assert "a-page" in lines[0] and "[[missing-z]]" in lines[0]
+    assert "z-page" in lines[1] and "[[missing-a]]" in lines[1]
+    assert "z-page" in lines[2] and "[[missing-b]]" in lines[2]
+    assert "z-page" in lines[3] and "[[missing-c]]" in lines[3]
+    assert "4 dangling reference" in str(excinfo.value)
