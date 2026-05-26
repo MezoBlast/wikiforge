@@ -19,6 +19,7 @@ import frontmatter as FM
 import provenance as PR
 import lint as LINT
 import index
+import wikilinks as WL
 
 
 # meta files copied verbatim into the bundle (log.md is curator-side only).
@@ -47,6 +48,40 @@ def should_drop(slug, page_type, fm, drop_placeholder):
     if drop_placeholder and fm.get("confidence") == "placeholder":
         return True
     return False
+
+
+def validate_no_dangling_refs(kept_pages, kept_slugs):
+    """Fail the build if any prose [[wikilink]] or frontmatter typed-edge in
+    `kept_pages` points at a slug not in `kept_slugs`.
+
+    Emits one diagnostic line per dangling ref on stderr, sorted by
+    (from_slug, source, target), then raises SystemExit with the total
+    count. The order is deterministic so curators can diff successive runs.
+    """
+    basename_index = {}
+    for slug in kept_slugs:
+        bn = slug.rsplit("/", 1)[-1]
+        basename_index.setdefault(bn, []).append(slug)
+
+    def resolves(target):
+        return WL.resolve(WL.normalize_target(target), kept_slugs, basename_index) is not None
+
+    dangling = []  # list of (from_slug, source, target)
+    for slug, pt, fm, body in kept_pages:
+        if pt is None:
+            continue  # meta files like manifest.md have no slug-typed refs to validate
+        if isinstance(body, str):
+            for target in WL.extract_prose_links(body):
+                if not resolves(target):
+                    dangling.append((slug, "body", target))
+
+    if not dangling:
+        return
+    dangling.sort()
+    for from_slug, source, target in dangling:
+        print(f"dangling-ref: {from_slug}  {source}  -->  [[{target}]]",
+              file=sys.stderr)
+    raise SystemExit(f"build aborted: {len(dangling)} dangling reference(s)")
 
 
 def copy_snippets(raw_dir, kept, out_snippets):
