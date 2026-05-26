@@ -29,6 +29,10 @@ Less common:
 - `bin/wiki-list [--tag T] [--type T] [--prefix P]` — enumerate pages with optional filters
 - `bin/wiki-backlinks [--type EDGE] <slug>` — show pages linking to `<slug>` as `<edge>: <from>` lines
 
+## Known gaps
+
+Some pages ship with `confidence: placeholder`. These are **known gaps**: the curator has noted the topic is referenced by other pages but the canonical source has not yet been ingested. Read the stub for the citation hint — it names the paper, repo, or URL that would close the gap — then fall back to live retrieval. Do not treat placeholder content as authoritative.
+
 ## When to use this wiki vs. live retrieval
 
 **Use the wiki for:**
