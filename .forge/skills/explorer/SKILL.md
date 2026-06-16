@@ -33,7 +33,7 @@ cat .forge/lint-report.md
 Harvest the **mechanical** signals from the report's `## Errors` and
 `## Warnings` sections:
 - `code-pattern-missing-provenance` / `excerpt-missing` — the cited repo isn't in `raw/repos/`. **High priority** — these are concrete, named gaps.
-- `low-confidence` — pages whose `confidence:` is `low` or `placeholder`. Each needs a stronger or second source.
+- `low-confidence` — pages whose `confidence:` is `low` or `placeholder`. Each needs a stronger or second source. **Placeholder pages tagged `stub`** are forward-link stubs ingest created as a "wanted pages" worklist (also listed under the report's `## Placeholder stubs / wanted pages`). Prioritize filling them: if a stub is fillable from sources already in `raw/`/`wiki/sources/`, note it as an ingest follow-up in your run log — you do **not** edit wiki pages or call ingest yourself; if it needs a new source, score it like any `low-confidence` fill.
 - `stale` — pages overdue for re-verification against their source.
 - `orphan` clusters — may need supporting sources (often LOW priority; an orphan is sometimes just stylistic).
 

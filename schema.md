@@ -271,11 +271,25 @@ Declaring a disallowed edge type is a **disallowed-edge-type** lint error.
 
 ## Body conventions
 
-- Markdown body (after the closing `---`) is freeform but should be brief: agents read pages whole. Aim for under ~300 lines per page; split into multiple linked pages if longer.
-- Use `[[wikilinks]]` liberally in prose. Plain links are cheap; they enrich the backlink graph at zero cost.
+- **Narrative prose stays concise; structured content is captured in full.** A page's *prose* should be brief — agents read pages whole. But *structured, enumerable* content (taxonomies, workflows/pipelines, code structures with their key workflows and design ideas, metrics and tabular data, algorithm steps) must be captured **completely and faithfully**: reconcile counts/totals and cross-check a source's table against its appendix/figures. If a faithful reference page would run long (≫300 lines), **split it into linked pages** — never drop content to hit a length target.
+- **Link densely — the graph is a product, not decoration.** Use `[[wikilinks]]` liberally in prose; every page should link out *and* be linked to. Create `concepts/`/`entities/` hub pages for recurring metrics, datasets, tools, and methods so multiple sources share nodes.
 - For `code-patterns/` pages, the body should briefly describe what the pattern does, when to use it, and known gotchas. The actual code excerpt is **not** embedded — the build step copies it to `wiki/snippets/<slug>.txt` from the cited `raw/repos/` path.
 - For `claims/` pages, the body lays out the assertion, the supporting evidence (citing the `evidence:` sources by wikilink), and the opposition.
-- For `sources/` pages, the body is the agent's read of what the source contributes — key claims, gaps, suspect parts. One screen of text, not the full paper.
+- For `sources/` pages, the body is the agent's read of what the source contributes — key claims, gaps, suspect parts. Keep it to one screen of *prose*; push exhaustive structured detail (taxonomies, tables, pipelines) into dedicated `concepts/` (or other typed) pages and link to them.
+
+### Forward-linking with placeholder stubs
+
+A `[[wikilink]]` to a page that does not exist is a hard `broken-wikilink`
+error, which would otherwise block forward references to concepts you have not
+written yet. To link forward, create the target as a **placeholder stub**: a
+`confidence: placeholder` page (tagged `stub`) carrying a one-line *What it is*
+gloss and a *Linked from* context line. Stubs are excluded from the build,
+surface as a worklist under `lint --report`'s `## Placeholder stubs / wanted
+pages`, and are filled later by ingest/explorer. Create them with
+`ingest_helpers.create_placeholder_stub()` — it is restricted to `concepts/` and
+`entities/` and requires the gloss + linked-from context, so a stub is always
+self-describing. Do **not** stub out-of-scope references (e.g. model-catalog
+names); leave those as plain text.
 
 ---
 

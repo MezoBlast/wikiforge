@@ -188,10 +188,21 @@ Conditional drafts (only when warranted by the source):
 
 **For `code-patterns/`:** the frontmatter MUST carry `repo`, `commit`, `path`, `lines`, `language`. Do NOT embed the code in the page body — the build step extracts it from `raw/repos/` at build time and writes to `wiki/snippets/`. Cite specific line ranges (e.g., `lines: "10-45"`).
 
+**Extract structured content exhaustively.** When a source contains *structured,
+enumerable* material — a taxonomy, an evaluation rubric, a workflow or pipeline
+(e.g. prompt-construction steps), a code module's key workflow and design ideas,
+a metrics/results table, a dataset schema — capture it **completely and
+faithfully** in a dedicated page (usually `concepts/`). Reconcile counts/totals
+and cross-check a source's table against its appendix/figures. If the page would
+run long, split it into linked pages — do not drop rows to hit a length target.
+Keep the `sources/` page itself a brief prose note that links to these pages.
+
 **Cross-references:**
 - Use plain `[[wikilinks]]` in prose for routine references. These are cheap and improve the backlink graph.
 - Add a typed relationship to frontmatter (`extends:`, `contradicts:`, `supersedes:`, `implements:`) only when the source clearly establishes that relationship — never speculatively.
 - Schema enforces which page types may declare which edge types. See `schema.md` for the matrix. When in doubt, prefer a plain wikilink over a wrong typed edge.
+- **Build the graph, don't just decorate it.** Every page should link out *and* be linked to. Create `concepts/`/`entities/` hub pages for recurring metrics, datasets, tools, and methods so multiple sources share nodes.
+- **Forward-link with placeholder stubs.** To link a concept/entity you are not writing now, call `ingest_helpers.create_placeholder_stub(slug, title, gloss=..., linked_from=...)` so the `[[wikilink]]` resolves (a dangling link is a hard error). Stubs are `confidence: placeholder` (build-excluded) and become a "wanted pages" worklist. Stub only *in-scope* nodes; leave out-of-scope references (e.g. model names) as plain text.
 
 **Frontmatter discipline (this is what the linter checks):**
 - Every page needs `title`, `type`, `created`, `last_verified`, `confidence` (one of: verified, likely, low, placeholder, refuted).
@@ -272,6 +283,19 @@ standing *in the field* (`validated` | `likely` | `open` | `refuted`). A page
 that accurately documents a genuine `open` controversy can still be
 `confidence: verified` — do not force the two values to track each other.
 
+## Completeness self-check
+
+Before you finish, re-scan the source and your output:
+
+- **Un-extracted structure?** Did the source contain a taxonomy, table, pipeline,
+  or enumerable schema you *summarized* instead of capturing in full? Draft the
+  dedicated page now.
+- **Un-wired links?** Does every new page link out *and* have something linking
+  to it? Wire missing edges; create placeholder stubs for in-scope targets you
+  referenced but did not write.
+- **Counts reconciled?** Where the source states a total (e.g. "56 facets"), does
+  your page enumerate that many?
+
 ## Lint before you stop
 
 After each ingest run, execute:
@@ -287,7 +311,7 @@ Address every error you introduced. Warnings can wait — but errors block the n
 
 ## What ingest is **not**
 
-- Not a paper-summarizer service. The source page is a curator note, not a comprehensive abstract.
+- Not a *narrative*-summarizer service. The `sources/` page is a brief curator note, not a prose recap. But this brevity rule is about narrative only — **structured content (taxonomies, pipelines, code structures, metrics/tables, enumerations) is extracted in full** into dedicated pages (see "Extract structured content exhaustively" in step 6). Under-extracting a taxonomy is as much a failure as over-summarizing prose.
 - Not a code-pasting service. Excerpts come from `raw/repos/` at build time. Your page body describes *why* and *when to use*, not what the code says line by line.
 - Not authoritative. Every page carries `confidence:`, and `last_verified:` is a date you owe honesty about. When a future session re-reads the source and finds you got something wrong, that's the system working — update the page and bump `last_verified`.
 

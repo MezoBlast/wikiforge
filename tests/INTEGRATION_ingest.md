@@ -114,3 +114,23 @@ the re-run in Test A correctly deduplicates.
 - Queue entry is set to `[!]`; a `request-human` entry of `type: paid-api`
   is written to `.forge/requests/inbox/`. No `.converted/` is produced.
   Lint exits 0.
+
+## Scenario: structured extraction + placeholder stubs
+
+**Setup:** ingest a paper containing a multi-level taxonomy or a large
+criteria/metrics table (the Qwen-Image-Bench paper is a representative case).
+
+**Expected:**
+
+- A dedicated `concepts/<slug>-taxonomy` (or equivalent) page enumerates the
+  structure **completely** — counts reconcile with any total the source states
+  (e.g. a "56 facets" claim yields 56 enumerated facets). The `sources/` page
+  stays a brief prose note that links to it.
+- Forward references to not-yet-written concepts/entities resolve because ingest
+  created `confidence: placeholder` stubs (tagged `stub`) via
+  `ingest_helpers.create_placeholder_stub`. Each stub carries a one-line
+  *What it is* gloss and a *Linked from* context line; none is a flat marker.
+- `python3 .forge/lib/lint.py --strict` exits 0, and `--report` lists the new
+  stubs under `## Placeholder stubs / wanted pages`.
+- Out-of-scope references (e.g. evaluated model names) appear as plain text, not
+  stubs.
