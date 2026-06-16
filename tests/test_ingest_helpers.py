@@ -155,3 +155,116 @@ def test_content_hash_directory_ignores_git(tmp_path):
     gitdir.mkdir()
     (gitdir / "HEAD").write_text("ref: refs/heads/main")
     assert ih.content_hash(repo) == before  # .git changes don't affect the hash
+
+
+def _make_wiki(tmp_path):
+    wiki = tmp_path / "wiki"
+    for d in ("concepts", "conventions", "code-patterns", "claims", "sources", "entities"):
+        (wiki / d).mkdir(parents=True)
+    return wiki
+
+
+def test_create_placeholder_stub_concept(tmp_path):
+    _make_wiki(tmp_path)
+    slug = ih.create_placeholder_stub(
+        "concepts/clip-score", "CLIPScore",
+        gloss="embedding-based text-image alignment metric.",
+        linked_from="[[concepts/mllm-as-a-judge]] as a baseline",
+        workspace_root=tmp_path,
+    )
+    assert slug == "concepts/clip-score"
+    text = (tmp_path / "wiki/concepts/clip-score.md").read_text()
+    assert "confidence: placeholder" in text
+    assert "- stub" in text  # tags rendered as a yaml block list
+    assert "**What it is:** embedding-based text-image alignment metric." in text
+    assert "**Linked from:** [[concepts/mllm-as-a-judge]] as a baseline" in text
+    assert "Expected scope" not in text  # omitted when arg absent
+    assert "Source hint" not in text
+
+
+def test_create_placeholder_stub_entity_ok(tmp_path):
+    _make_wiki(tmp_path)
+    ih.create_placeholder_stub(
+        "entities/clip", "CLIP",
+        gloss="vision-language model.",
+        linked_from="[[concepts/clip-score]]",
+        entity_type="tool",
+        expected_scope="architecture and training.",
+        source_hint="Radford et al. 2021",
+        aliases=["Contrastive Language-Image Pretraining"],
+        workspace_root=tmp_path,
+    )
+    text = (tmp_path / "wiki/entities/clip.md").read_text()
+    assert "type: entity" in text
+    assert "entity_type: tool" in text
+    assert "**Expected scope:** architecture and training." in text
+    assert "**Source hint:** Radford et al. 2021" in text
+    assert "Contrastive Language-Image Pretraining" in text
+
+
+def test_create_placeholder_stub_entity_requires_entity_type(tmp_path):
+    _make_wiki(tmp_path)
+    with pytest.raises(ValueError):
+        ih.create_placeholder_stub(
+            "entities/q-judger", "Q-Judger",
+            gloss="a judge model.", linked_from="[[sources/x]]",
+            workspace_root=tmp_path,
+        )
+
+
+def test_create_placeholder_stub_entity_rejects_bad_type(tmp_path):
+    _make_wiki(tmp_path)
+    with pytest.raises(ValueError, match="invalid entity_type"):
+        ih.create_placeholder_stub(
+            "entities/x", "X",
+            gloss="a thing.", linked_from="[[concepts/a]]",
+            entity_type="model",  # not in ENTITY_TYPE
+            workspace_root=tmp_path,
+        )
+
+
+def test_create_placeholder_stub_rejects_claim(tmp_path):
+    _make_wiki(tmp_path)
+    with pytest.raises(ValueError):
+        ih.create_placeholder_stub(
+            "claims/foo", "Foo", gloss="x.", linked_from="[[sources/y]]",
+            workspace_root=tmp_path,
+        )
+
+
+def test_create_placeholder_stub_requires_gloss_and_linked_from(tmp_path):
+    _make_wiki(tmp_path)
+    with pytest.raises(ValueError):
+        ih.create_placeholder_stub("concepts/a", "A", gloss="  ",
+                                   linked_from="[[x]]", workspace_root=tmp_path)
+    with pytest.raises(ValueError):
+        ih.create_placeholder_stub("concepts/a", "A", gloss="ok.",
+                                   linked_from="", workspace_root=tmp_path)
+
+
+def test_create_placeholder_stub_idempotent(tmp_path):
+    _make_wiki(tmp_path)
+    kw = dict(gloss="x.", linked_from="[[concepts/a]]", workspace_root=tmp_path)
+    first = ih.create_placeholder_stub("concepts/dup", "Dup", **kw)
+    (tmp_path / "wiki/concepts/dup.md").write_text("SENTINEL", encoding="utf-8")
+    second = ih.create_placeholder_stub("concepts/dup", "Dup", **kw)
+    assert first == "concepts/dup"
+    assert second is None
+    assert (tmp_path / "wiki/concepts/dup.md").read_text() == "SENTINEL"
+
+
+def test_create_placeholder_stub_lints_clean(tmp_path):
+    import datetime
+    import lint
+    wiki = _make_wiki(tmp_path)
+    (wiki / "concepts/a.md").write_text(
+        "---\ntitle: A\ntype: concept\ncreated: '2026-01-01'\n"
+        "last_verified: '2026-01-01'\nconfidence: likely\n---\n\nbody\n",
+        encoding="utf-8")
+    ih.create_placeholder_stub(
+        "entities/clip", "CLIP", gloss="vlm.",
+        linked_from="[[concepts/a]]", entity_type="tool",
+        workspace_root=tmp_path)
+    issues = lint.lint(wiki, tmp_path / "raw", 180, 30, datetime.date(2026, 6, 16))
+    errors = [i for i in issues if i.severity == lint.ERROR]
+    assert errors == []  # placeholder warnings are fine; zero errors

@@ -8,11 +8,13 @@ Heavy PDF / repo parsing is intentionally NOT done here — the curator agent ha
 its own Read tool and can inspect files directly. These helpers exist where
 mechanical correctness matters (dedup hashes, queue state machine).
 """
+import datetime
 import hashlib
 import re
 from pathlib import Path
 
 import frontmatter
+import schema_spec as S
 
 QUEUE_STATES = {" ", "~", "x", "!"}  # pending, in-progress, done, blocked
 # path is non-greedy so source paths containing spaces are captured whole;
@@ -253,3 +255,73 @@ def slugify(text):
     text = text.lower()
     text = re.sub(r"[^a-z0-9]+", "-", text)
     return text.strip("-")
+
+
+STUBBABLE_TYPES = {"concept", "entity"}
+
+
+def create_placeholder_stub(slug, title, *, gloss, linked_from,
+                            expected_scope=None, source_hint=None,
+                            entity_type=None, aliases=None, workspace_root="."):
+    """Create wiki/<slug>.md as a self-describing confidence:placeholder stub.
+
+    A forward-link target: lets ingest reference a concept/entity it has not
+    written yet without tripping the broken-wikilink error. Idempotent — never
+    overwrites an existing page. Returns the slug on creation, or None if the
+    page already existed.
+
+    Descriptive by construction: `gloss` (one sentence — what this node IS) and
+    `linked_from` (verbatim context string, normally containing [[wikilinks]])
+    are required, so the helper cannot emit a flat "TODO" stub. `expected_scope`,
+    `source_hint`, and `aliases` are optional enrichment.
+
+    Restricted to concepts/ and entities/ slugs. entities/ require entity_type.
+    Raises ValueError for any other slug type, a missing/invalid entity_type, or
+    an empty gloss / linked_from.
+    """
+    if not gloss or not str(gloss).strip():
+        raise ValueError("gloss is required and must be non-empty")
+    if not linked_from or not str(linked_from).strip():
+        raise ValueError("linked_from is required and must be non-empty")
+    top = slug.split("/", 1)[0] if "/" in slug else ""
+    ptype = S.DIR_TYPES.get(top)
+    if ptype not in STUBBABLE_TYPES:
+        raise ValueError(
+            f"refusing to stub {slug!r}: only concepts/ and entities/ pages are "
+            f"stubbable (resolved type: {ptype!r})"
+        )
+    if ptype == "entity":
+        if not entity_type:
+            raise ValueError("entity stubs require entity_type")
+        if entity_type not in S.ENTITY_TYPE:
+            raise ValueError(
+                f"invalid entity_type {entity_type!r}; "
+                f"must be one of {sorted(S.ENTITY_TYPE)}"
+            )
+    page_path = Path(workspace_root) / "wiki" / f"{slug}.md"
+    if page_path.exists():
+        return None
+    today = datetime.date.today().isoformat()
+    fm = {
+        "title": title,
+        "type": ptype,
+        "created": today,
+        "last_verified": today,
+        "confidence": "placeholder",
+        "tags": ["stub"],
+    }
+    if aliases:
+        fm["aliases"] = list(aliases)
+    if ptype == "entity":
+        fm["entity_type"] = entity_type
+    lines = ["", "**Stub — needs filling.**", "",
+             f"**What it is:** {str(gloss).strip()}"]
+    if expected_scope and str(expected_scope).strip():
+        lines.append(f"**Expected scope:** {str(expected_scope).strip()}")
+    lines.append(f"**Linked from:** {str(linked_from).strip()}")
+    if source_hint and str(source_hint).strip():
+        lines.append(f"**Source hint:** {str(source_hint).strip()}")
+    body = "\n".join(lines) + "\n"
+    page_path.parent.mkdir(parents=True, exist_ok=True)
+    page_path.write_text(frontmatter.dump(fm, body), encoding="utf-8")
+    return slug
