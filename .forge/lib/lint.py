@@ -387,7 +387,17 @@ def fix(wiki_dir, today):
     print(f"rebuilt {wiki_dir / '.meta'}")
 
 
-def write_report(report_path, issues, gaps, today):
+def collect_stubs(wiki_dir):
+    """Return sorted [(slug, title)] for confidence:placeholder pages — the
+    'wanted pages' worklist (forward-link stubs awaiting fill)."""
+    stubs = []
+    for slug, _pt, fm, _body in index.load_pages(wiki_dir):
+        if isinstance(fm, dict) and fm.get("confidence") == "placeholder":
+            stubs.append((slug, fm.get("title", slug)))
+    return sorted(stubs)
+
+
+def write_report(report_path, issues, gaps, stubs, today):
     """Render the agent-facing health snapshot to report_path. Overwrites."""
     errors = [i for i in issues if i.severity == ERROR and not i.draft]
     warnings = [i for i in issues if i.severity == WARNING and not i.draft]
@@ -436,6 +446,14 @@ def write_report(report_path, issues, gaps, today):
             out.append(f"- [{g['ts']}] severity: {g['severity']} — {summary}")
     else:
         out.append("_(none)_")
+    out += ["", "## Placeholder stubs / wanted pages", "",
+            "`confidence: placeholder` pages — forward-link stubs and unfilled "
+            "nodes. Excluded from the build; fill or supersede them.", ""]
+    if stubs:
+        for slug, title in stubs:
+            out.append(f"- [[{slug}]] — {title}")
+    else:
+        out.append("_(none)_")
     report_path.write_text("\n".join(out).rstrip() + "\n", encoding="utf-8")
 
 
@@ -481,7 +499,8 @@ def main():
     forge_dir = wiki_dir.parent / ".forge"
     if forge_dir.is_dir():
         gaps = collect_gaps(forge_dir / "feedback.md", args.gap_days, today)
-        write_report(forge_dir / "lint-report.md", issues, gaps, today)
+        stubs = collect_stubs(wiki_dir)
+        write_report(forge_dir / "lint-report.md", issues, gaps, stubs, today)
 
     if args.strict and n_err > 0:
         sys.exit(1)

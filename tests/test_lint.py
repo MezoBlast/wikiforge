@@ -136,7 +136,7 @@ def test_write_report_sections(tmp_path):
     gaps = [{"ts": "2026-05-19T10:00:00Z", "severity": "hard",
              "lines": ["Q: Something?"]}]
     report = tmp_path / "lint-report.md"
-    lint.write_report(report, issues, gaps, datetime.date(2026, 5, 20))
+    lint.write_report(report, issues, gaps, [], datetime.date(2026, 5, 20))
     txt = report.read_text(encoding="utf-8")
     assert "# Lint report" in txt
     assert "## Errors" in txt
@@ -231,3 +231,36 @@ def test_fresh_placeholder_is_low_confidence_not_rotting(tmp_path):
     codes = {i.code for i in issues}
     assert "low-confidence" in codes
     assert "placeholder-rotting" not in codes
+
+
+def test_collect_stubs_finds_placeholder_pages(tmp_path):
+    wiki = tmp_path / "wiki"
+    (wiki / "concepts").mkdir(parents=True)
+    (wiki / "concepts" / "clip-score.md").write_text(
+        _page("title: CLIPScore\ntype: concept\ncreated: '2026-01-01'\n"
+              "last_verified: '2026-01-01'\nconfidence: placeholder\ntags: [stub]"),
+        encoding="utf-8")
+    (wiki / "concepts" / "real.md").write_text(
+        _page("title: Real\ntype: concept\ncreated: '2026-01-01'\n"
+              "last_verified: '2026-01-01'\nconfidence: likely"),
+        encoding="utf-8")
+    stubs = lint.collect_stubs(wiki)
+    assert ("concepts/clip-score", "CLIPScore") in stubs
+    assert ("concepts/real", "Real") not in stubs
+
+
+def test_report_lists_placeholder_stubs(tmp_path):
+    report = tmp_path / "report.md"
+    lint.write_report(report, [], [], [("concepts/clip-score", "CLIPScore")],
+                      datetime.date(2026, 5, 20))
+    text = report.read_text()
+    assert "## Placeholder stubs / wanted pages" in text
+    assert "[[concepts/clip-score]] — CLIPScore" in text
+
+
+def test_report_no_stubs_renders_none(tmp_path):
+    report = tmp_path / "report.md"
+    lint.write_report(report, [], [], [], datetime.date(2026, 5, 20))
+    text = report.read_text()
+    assert "## Placeholder stubs / wanted pages" in text
+    assert "_(none)_" in text
