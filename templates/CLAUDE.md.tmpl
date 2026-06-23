@@ -25,6 +25,7 @@ If symlinks were created during bootstrap, the four skills are also discoverable
 4. **Edge-type vocabulary is fixed at five.** `references`, `extends`, `contradicts`, `supersedes`, `implements`. Do not invent a sixth. When unsure between `references` (default, prose) and a typed edge, prefer plain prose `[[wikilink]]`.
 5. **Raw lives in `raw/`. It never travels into the bundle.** Bundle excerpts are extracted at build time from `raw/repos/<org>/<repo>@<sha>/` and copied to `wiki/snippets/` — never copy raw files into `wiki/` by hand.
 6. **Append-only state.** `wiki/log.md`, `.forge/log.md`, `.forge/queue.md`, `.forge/feedback.md`, `.forge/requests/inbox/`, `.forge/requests/responses/` are append-only. Don't rewrite history.
+7. **Granularity is high; the graph is the product.** Extract *structured* content (taxonomies, workflows, code structures, metrics/tables, enumerations) exhaustively into dedicated pages — keep only *narrative* prose brief. Cross-link densely: every page links out and is linked to. Forward-link via `ingest_helpers.create_placeholder_stub()`. See `schema.md` (Body conventions) and `.forge/skills/ingest/SKILL.md`.
 
 ## What lives where
 
