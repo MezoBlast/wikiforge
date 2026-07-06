@@ -16,14 +16,72 @@ Six types, fixed in v1. Adding a seventh requires a new section here, a new lint
 
 | Type             | Directory          | Purpose                                                 |
 | ---------------- | ------------------ | ------------------------------------------------------- |
-| concept          | `wiki/concepts/`   | What something is — theory, methods, definitions.       |
-| convention       | `wiki/conventions/`| How the field does things — notation, evaluation norms. |
+| concept          | `wiki/concepts/`   | **Residual.** Abstract knowledge not covered by another type: general theory/definitions, or an entity's internal structure (taxonomy, results, pipeline, metric mechanism). |
+| convention       | `wiki/conventions/`| An abstract normative practice — how the field conducts/reports evaluation (protocol, scoring scale, judging paradigm, aggregation rule). |
 | code-pattern     | `wiki/code-patterns/` | Canonical code with hard provenance.                 |
 | claim            | `wiki/claims/`     | Testable assertions with evidence + counter-evidence.   |
 | source           | `wiki/sources/`    | One summary per ingested raw source.                    |
-| entity           | `wiki/entities/`   | People, labs, projects, tools.                          |
+| entity           | `wiki/entities/`   | An embodied artifact (model, dataset, benchmark-project, tool — has weights/data/repo) or a real person/lab/organization. |
 
 Subdirectories within a type are permitted (e.g., `wiki/concepts/optimization/sgd.md`). A page's **slug** is the path inside `wiki/` minus `.md` (e.g., `concepts/optimization/sgd`).
+
+---
+
+## Choosing a page type
+
+Pick a page's type with this **priority-ordered procedure — first match wins.**
+The specific types are checked *before* `concept`; `concept` is the **residual**,
+reached only when 1–5 do not apply. This ordering is deliberate — it stops
+`concept` from becoming a catch-all.
+
+1. **source** — the raw artifact you are ingesting (one per source, always).
+2. **code-pattern** — canonical code you can pin to `repo` + `commit` + `path` +
+   `lines`; a *located excerpt* of an implementation.
+3. **claim** — a testable empirical assertion carrying evidence and/or
+   counter-evidence ("X outperforms Y", "metric Z saturates").
+4. **entity** — an **embodied** thing: a specific artifact with weights, data, or
+   a repo (a model, dataset, benchmark-project, tool), or a real person / lab /
+   organization. Singular, nominal identity.
+5. **convention** — an **abstract normative practice**: *how the field conducts or
+   reports evaluation* — a protocol, scoring scale, judging paradigm, or
+   aggregation rule — owned by no single artifact and adopted across many.
+6. **concept** (residual) — abstract knowledge that is none of the above: general
+   theory, a definition or capability, or the **internal structure of an entity**
+   (a benchmark's taxonomy, results table, pipeline, or a metric's mechanism).
+
+### The spine: embodied vs. abstract
+
+The hard boundary is **entity (embodied) vs. concept/convention (abstract)**:
+
+- An **entity** is embodied — you obtain a *thing* (weights / data / repo) or it
+  is a real person or organization. Among abstractions, a **convention** is a
+  *practice* ("how the field evaluates") and a **concept** is *knowledge* ("what
+  something is").
+- **Citability and runnability are not criteria.** A judge model shipped inside
+  another paper's release, with no standalone citation, is still an entity (it is
+  embodied). A formula-metric is "runnable" but has no embodiment, so it is a
+  concept.
+
+### Tie-breakers
+
+- **Paraphrase-identity test.** Rewrite *how it works* — is it still the same
+  thing? Yes → **entity** (identity is its name; a named model survives a change
+  to its internals). No → **concept/convention** (identity is its content; a named
+  method stops being itself if you change what it means).
+- **Entity vs. code-pattern.** Same artifact, different granularity: the whole
+  named artifact is an **entity** (a reference node, no code body); a cited
+  line-range of its source is a **code-pattern**.
+- **Datasets.** The dataset-as-artifact is an **entity**; its schema/splits are a
+  linked **concept**.
+- **Metrics, split by embodiment.** A metric backed by weights or data (a trained
+  reward/preference model) is an **entity**; a metric that is a formula or
+  procedure (even if it invokes a separate model) is a **concept**, and the model
+  it invokes is the entity.
+
+The tell for entity-vs-convention is the verb: an entity **uses / reports /
+applies** a convention. A benchmark-project (entity) *uses* a decomposition
+paradigm (convention); a trained judge (entity) *applies* an aggregation rule
+(convention). When X uses Y, X is the entity and Y the convention.
 
 ---
 

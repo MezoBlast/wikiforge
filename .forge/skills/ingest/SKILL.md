@@ -176,15 +176,26 @@ Before drafting pages, read:
 
 Always draft a `wiki/sources/<slug>.md`, even for trivial sources. The source page is the agent's read of what the source contributes.
 
-Conditional drafts (only when warranted by the source):
+**Choose each page's type with the decision procedure in `schema.md`
+("Choosing a page type") — do not default to `concepts/`.** It is
+priority-ordered, first match wins, and `concept` is the *residual* (reached only
+when the specific types do not apply):
 
-| Source type | Likely to draft / update                                |
-| ----------- | ------------------------------------------------------- |
-| paper       | `concepts/`, `claims/`, `entities/`                     |
-| repo        | `code-patterns/` (with provenance), maybe `entities/`   |
-| doc         | `conventions/`                                          |
-| web         | varies by content                                       |
-| note        | varies; usually `concepts/` or `conventions/`           |
+1. **source** — the raw artifact itself (always, one per source).
+2. **code-pattern** — code pinned to `repo`+`commit`+`path`+`lines`.
+3. **claim** — a testable assertion with evidence/counter-evidence.
+4. **entity** — an *embodied* artifact (weights/data/repo: a model, dataset,
+   benchmark-project, tool) or a real person/lab/org.
+5. **convention** — an *abstract normative practice* (protocol, scoring scale,
+   judging paradigm, aggregation rule) adopted across many artifacts.
+6. **concept** (residual) — general theory/definitions, or the *internal structure
+   of an entity* (a benchmark's taxonomy, results, pipeline, or a metric's
+   mechanism).
+
+A single source usually yields several pages of different types — a benchmark
+paper yields a `source`, an `entity` hub for the benchmark, a `convention` for any
+field-wide protocol it introduces, and `concepts` for its taxonomy/results. The
+tell for entity-vs-convention: an entity **uses/reports/applies** a convention.
 
 **For `code-patterns/`:** the frontmatter MUST carry `repo`, `commit`, `path`, `lines`, `language`. Do NOT embed the code in the page body — the build step extracts it from `raw/repos/` at build time and writes to `wiki/snippets/`. Cite specific line ranges (e.g., `lines: "10-45"`).
 
@@ -192,7 +203,7 @@ Conditional drafts (only when warranted by the source):
 enumerable* material — a taxonomy, an evaluation rubric, a workflow or pipeline
 (e.g. prompt-construction steps), a code module's key workflow and design ideas,
 a metrics/results table, a dataset schema — capture it **completely and
-faithfully** in a dedicated page (usually `concepts/`). Reconcile counts/totals
+faithfully** in a dedicated page whose type you pick via the decision procedure above — a named embodied artifact → `entities/`, a field-wide evaluation practice → `conventions/`, an entity's internal structure or general theory → `concepts/`. Reconcile counts/totals
 and cross-check a source's table against its appendix/figures. If the page would
 run long, split it into linked pages — do not drop rows to hit a length target.
 Keep the `sources/` page itself a brief prose note that links to these pages.
@@ -295,6 +306,11 @@ Before you finish, re-scan the source and your output:
   referenced but did not write.
 - **Counts reconciled?** Where the source states a total (e.g. "56 facets"), does
   your page enumerate that many?
+- **Type audit?** Did you file a named embodied artifact (a model, dataset,
+  benchmark-project, tool) or a field-wide evaluation practice as a `concept`?
+  Re-check every new page against the decision procedure in `schema.md` — a named
+  artifact belongs in `entities/`, a shared practice in `conventions/`; `concept`
+  is only the residual.
 
 ## Lint before you stop
 
