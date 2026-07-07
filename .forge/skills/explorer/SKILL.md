@@ -52,6 +52,26 @@ question. Each entry is tagged `severity: hard` (no page covered it) or
 eligible.** Skip any entry whose question already appears in a prior
 `## explorer plan` block in `.forge/log.md` — it has been slated before.
 
+**e) Backward citations (cited-by sweep).** Requires `SEMANTIC_SCHOLAR_API_KEY`
+in `.forge/secrets/credentials.env`. The key is bootstrap-provisioned — if it
+is absent, note `signal e skipped: no S2 key` in your run log and move on;
+**never** file a request-human for it. Run:
+
+```sh
+python3 .forge/lib/citations.py --sweep
+cat .forge/citations-report.md
+```
+
+The script no-ops (exit 0) when the key is absent or the last sweep is
+< 14 days old, and exits 2 on API failure — none of these block the run;
+proceed with signals a–d. On success the report ranks later papers that cite
+the wiki's seed papers by **co-citing score** — how many seeds the citer
+cites, the forward-in-time mirror of the co-citation score in signal (c).
+Drop candidates that fall under `wiki/out_of_scope.md`, score the rest
+(table below). arXiv candidates use the standard arXiv fetch recipe; entries
+under "Citers without arXiv IDs" use the non-arxiv recipe. Queue-note
+convention: `cited-by sweep; co-cites 3 seeds (viescore, imagenhub, aurora)`.
+
 ### 2. Plan a bounded slate (do this before any fetch)
 
 For every candidate from step 1, compute a priority score and write it as a checklist to `.forge/log.md` under a new `## explorer plan` heading. The act of writing the plan IS the planning pass — once written, you commit to fetching exactly that slate, nothing more.
@@ -67,6 +87,9 @@ For every candidate from step 1, compute a priority score and write it as a chec
 | Citation-chain target with co-citation score ≥ 3                         | 50    |
 | Citation-chain target with co-citation score = 2                         | 30    |
 | Citation-chain target with co-citation score = 1                         | 10 — usually defer |
+| Cited-by candidate with co-citing score ≥ 3                              | 50    |
+| Cited-by candidate with co-citing score = 2                              | 30    |
+| Cited-by candidate with co-citing score = 1                              | 10 — usually defer |
 | Adds a second source for a `low-confidence` page                         | 25    |
 | Re-verifies a `stale` page against its source                            | 20    |
 | Closes an `orphan` warning by adding a supporting source                 | 15    |
