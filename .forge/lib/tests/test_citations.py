@@ -1,9 +1,13 @@
 """Tests for citations.py pure logic. Run: python3 .forge/lib/tests/test_citations.py"""
 import datetime
+import io
 import json
+import os
 import sys
 import tempfile
 import unittest
+import urllib.error
+import unittest.mock as mock
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
@@ -133,6 +137,50 @@ class TestReport(unittest.TestCase):
     def test_empty_report(self):
         now = datetime.datetime(2026, 7, 7, tzinfo=UTC)
         self.assertIn("No new candidates", C.render_report({}, now))
+
+
+def fake_opener_pages(pages):
+    """Opener returning successive JSON pages; raises if called too often."""
+    it = iter(pages)
+
+    def opener(req, timeout=30):
+        return io.BytesIO(json.dumps(next(it)).encode())
+    return opener
+
+
+class TestFetchCiters(unittest.TestCase):
+    def test_pagination_follows_next(self):
+        pages = [
+            {"data": [{"citingPaper": citer("A", arxiv="5555.55555")}], "next": 100},
+            {"data": [{"citingPaper": citer("B", arxiv="6666.66666")}]},
+        ]
+        got = C.fetch_citers("1111.11111", "k", sleep=lambda s: None,
+                             opener=fake_opener_pages(pages))
+        self.assertEqual([p["title"] for p in got], ["A", "B"])
+
+    def test_404_seed_returns_empty(self):
+        def opener(req, timeout=30):
+            raise urllib.error.HTTPError(req.full_url, 404, "nf", {}, None)
+        self.assertEqual(
+            C.fetch_citers("1111.11111", "k", sleep=lambda s: None, opener=opener), [])
+
+    def test_persistent_429_raises_sweep_error(self):
+        def opener(req, timeout=30):
+            raise urllib.error.HTTPError(req.full_url, 429, "tm", {}, None)
+        with self.assertRaises(C.SweepError):
+            C.fetch_citers("1111.11111", "k", sleep=lambda s: None, opener=opener)
+
+
+class TestMainKeyGate(unittest.TestCase):
+    def test_no_key_skips_with_exit_0(self):
+        with mock.patch.object(C, "load_credentials", return_value={}), \
+             mock.patch.dict(os.environ, {}, clear=False):
+            os.environ.pop("SEMANTIC_SCHOLAR_API_KEY", None)
+            buf = io.StringIO()
+            with mock.patch("sys.stdout", buf):
+                rc = C.main(["--sweep"])
+            self.assertEqual(rc, 0)
+            self.assertIn("sweep skipped: no SEMANTIC_SCHOLAR_API_KEY", buf.getvalue())
 
 
 if __name__ == "__main__":

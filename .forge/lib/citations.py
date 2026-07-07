@@ -243,7 +243,60 @@ def render_report(candidates, now):
     return "\n".join(lines) + "\n"
 
 
+# ---------- CLI ----------
+
+def main(argv=None):
+    ap = argparse.ArgumentParser(
+        description="backward-citation (cited-by) sweep via Semantic Scholar")
+    ap.add_argument("--sweep", action="store_true", help="run the cited-by sweep")
+    ap.add_argument("--force", action="store_true",
+                    help=f"ignore the {SWEEP_INTERVAL_DAYS}-day cadence gate")
+    args = ap.parse_args(argv)
+    if not args.sweep:
+        ap.print_help()
+        return 0
+
+    load_credentials()
+    api_key = os.environ.get("SEMANTIC_SCHOLAR_API_KEY", "").strip()
+    if not api_key:
+        print("sweep skipped: no SEMANTIC_SCHOLAR_API_KEY")
+        return 0
+
+    now = datetime.datetime.now(datetime.timezone.utc)
+    cache = load_cache()
+    if not should_run(cache, now, force=args.force):
+        print(f"sweep skipped: last sweep {cache['last_sweep']} is less than "
+              f"{SWEEP_INTERVAL_DAYS} days old (use --force to override)")
+        return 0
+
+    seeds = extract_seed_ids()
+    if not seeds:
+        print("sweep skipped: no arXiv seeds found in wiki/sources/")
+        return 0
+
+    print(f"sweeping {len(seeds)} seeds...")
+    citers_by_seed = {}
+    try:
+        for i, seed_id in enumerate(sorted(seeds), 1):
+            citers_by_seed[seed_id] = fetch_citers(seed_id, api_key)
+            print(f"  [{i}/{len(seeds)}] arXiv:{seed_id} ({seeds[seed_id]}): "
+                  f"{len(citers_by_seed[seed_id])} citers")
+            time.sleep(THROTTLE_SECONDS)
+    except SweepError as e:
+        # cache untouched: the next run retries the whole sweep
+        print(f"sweep failed: {e}", file=sys.stderr)
+        return 2
+
+    candidates = compute_co_citing(citers_by_seed, seeds)
+    fresh = filter_new(candidates, cache, known_arxiv_ids(seeds))
+    REPORT_PATH.write_text(render_report(fresh, now), encoding="utf-8")
+    for key, entry in fresh.items():
+        cache["seen"][key] = len(entry["seeds"])
+    cache["last_sweep"] = now.isoformat(timespec="seconds")
+    save_cache(cache)
+    print(f"report: {REPORT_PATH.relative_to(ROOT)} ({len(fresh)} new candidates)")
+    return 0
+
+
 if __name__ == "__main__":
-    print("citations.py: main() arrives in the next task; nothing to run yet",
-          file=sys.stderr)
-    sys.exit(1)
+    sys.exit(main())
